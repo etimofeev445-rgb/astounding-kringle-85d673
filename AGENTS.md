@@ -1,0 +1,25 @@
+# AGENTS.md
+
+## Project overview
+
+UAT Market is a Telegram Mini App (opened from a bot's menu button) built with TanStack Start and deployed on Netlify. UI language is Ukrainian.
+
+## Architecture
+
+- Single route `src/routes/index.tsx` hosts the whole app: a screen state machine (`Screen` in `src/lib/nav.ts`) plus a fixed bottom tab bar. Screens are switched in-memory rather than via router URLs, because Telegram Mini Apps behave best as a single page; Telegram's native BackButton returns to `home`.
+- `src/components/screens/*` — one file per screen (Home, SearchScreen, Rates, Banks, Docs, Calc, CalendarScreen).
+- `src/components/ui.tsx` — shared primitives (Card, Segmented, Field, `inputCls`, `fmt` number formatter).
+- `src/components/Calculator.tsx` — basic calculator (reducer-based), used inside the Calc screen.
+- `src/server/rates.ts` — `createServerFn` that fetches NBU, PrivatBank and monobank public APIs server-side (avoids CORS; each source fails independently and returns an empty list). monobank rate-limits its public endpoint, so empty mono data is expected sometimes.
+- `src/lib/rates.ts` — `useRates()` hook with a module-level cache so rates are fetched once per session.
+- `src/lib/holidays.ts` — Ukrainian holidays (fixed + Orthodox Easter/Trinity computed).
+- `src/lib/telegram.ts` — guarded wrapper around `window.Telegram.WebApp` (loaded by script tag in `__root.tsx`); every call must work in a normal browser too.
+- `src/data/banks.ts`, `src/data/documents.ts` — static reference data and document templates. Empty `hotline` means "don't show a number".
+
+## Conventions
+
+- Tailwind v4 theme tokens in `src/styles.css` (`ink`, `panel`, `panel-2`, `line`, `mute`, `sky`, `sun`, `up`, `down`); fonts Unbounded (display) + Manrope.
+- Mobile-first, max width `max-w-md`; use `tap` class for press feedback and `haptic()` for Telegram haptics.
+- Netlify Database (Drizzle, `db/schema.ts`, migrations in `netlify/database/migrations`) stores `topup_orders`. Validate Telegram `initData` server-side (`verifyInitData` in `src/server/telegramBot.ts`) for anything per-user.
+- Mobile top-up pays in-app via Telegram Payments: `src/server/topup.ts` creates the invoice, `src/routes/api/telegram/webhook.ts` answers pre-checkout, records payment and calls `src/server/aggregator.ts`. Env: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_PROVIDER_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_ADMIN_CHAT_ID`, `TOPUP_API_URL`, `TOPUP_API_KEY`. Without the provider token the screen falls back to operator websites.
+- Business catalog (the "Карта" tab, `MapScreen`): a feed of business cards. "Опублікувати" in `PlaceForm` (name, category, description, hours, price/services, cover, logo, phone/Instagram/Telegram, direct address link) (plus required country/city, suggested from `COUNTRIES` in `src/lib/places.ts`, shown as "📍 Локація" in the post) calls `savePlace` (`src/server/places.ts`), which posts the card to the catalog channel via the Bot API (`src/server/catalogChannel.ts`: text, photo or cover+logo album, caption ≤1024) and only keeps the card if the post succeeded. The `places` table is just the index of those posts (`channel_chat_id`, `channel_message_ids`) so the feed, edits (edited in place or reposted) and deletions (`deleteMessages`, or a "видалено" caption for posts older than 48h) stay in sync. Only the author (same Telegram ID from verified initData) can edit/delete; the feed has a "Мої" filter and a debounced, case-insensitive search over every card field (`placeSearchText`). Logo/cover live in the `place-photos` blob store served by `/api/places/photo/$id`. Env: `TELEGRAM_CATALOG_CHANNEL` (defaults to `TELEGRAM_ADS_CHANNEL` / `@UATmarket`; the bot must be a channel admin), optional `TELEGRAM_MINIAPP_URL` (https://t.me/<bot>/<app>) for an "open in app" link under posts. No in-app map or geolocation: "Відкрити на мапі" opens the author's link (`mapUrl`; plain text is turned into a Google Maps search, `normalizeMapUrl` in `src/lib/places.ts`). Outside Telegram "Додати бізнес" opens the admin chat (`src/lib/admin.ts`). Storefront opens via `?store=<username>` or `startapp=store_<username>` and lists all cards of that owner.

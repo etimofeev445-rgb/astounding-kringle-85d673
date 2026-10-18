@@ -1,0 +1,200 @@
+@import "tailwindcss" source("../");
+
+@theme {
+  --color-ink: #0b1424;
+  --color-panel: #121e33;
+  --color-panel-2: #1a2943;
+  --color-line: #24375a;
+  --color-mute: #8aa0c2;
+  --color-sky: #2f8cff;
+  --color-sun: #ffd23f;
+  --color-up: #3ddc97;
+  --color-down: #ff6b6b;
+  --font-display: "Unbounded", "Manrope", system-ui, sans-serif;
+  --font-sans: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html,
+body {
+  @apply m-0 bg-ink text-white;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+body {
+  background:
+    radial-gradient(120% 60% at 100% 0%, rgba(47, 140, 255, 0.18), transparent 60%),
+    radial-gradient(80% 40% at 0% 100%, rgba(255, 210, 63, 0.08), transparent 60%),
+    var(--color-ink);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
+    monospace;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.tap {
+  transition: transform 0.12s ease, background-color 0.15s ease;
+}
+.tap:active {
+  transform: scale(0.96);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 0.35s ease both;
+}
+
+/* Colorful animated "Відкрити карту" — tab bar button and card CTAs. */
+@keyframes hue-flow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
+@keyframes card-bob {
+  0%, 100% { transform: rotate(0) translateY(0); }
+  20% { transform: rotate(-12deg) translateY(-1px); }
+  40% { transform: rotate(10deg) translateY(-2px); }
+  60% { transform: rotate(0) translateY(0); }
+}
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(255, 92, 168, 0.55); }
+  70% { box-shadow: 0 0 0 9px rgba(255, 92, 168, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 92, 168, 0); }
+}
+@keyframes shine {
+  0% { transform: translateX(-120%) skewX(-20deg); }
+  60%, 100% { transform: translateX(260%) skewX(-20deg); }
+}
+.card-tab,
+.glow-btn {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(90deg, #ff5ca8, #ffb13d, #3ddc97, #2f8cff, #9b6bff, #ff5ca8);
+  background-size: 300% 100%;
+  animation: hue-flow 6s linear infinite;
+}
+.card-tab {
+  animation: hue-flow 4s linear infinite, pulse-ring 2.2s ease-out infinite;
+}
+.card-tab::after,
+.glow-btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  animation: shine 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+.card-tab-icon {
+  animation: card-bob 2.2s ease-in-out infinite;
+}
+.card-tab-label {
+  background: linear-gradient(90deg, #ff5ca8, #ffb13d, #3ddc97, #2f8cff, #ff5ca8);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: hue-flow 4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-tab, .glow-btn, .card-tab-label, .card-tab-icon, .card-tab::after, .glow-btn::after {
+    animation: none;
+  }
+}
+
+/* Home-screen «Відкрити карту» banner: same animated rainbow, with a glow. */
+.card-cta {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(90deg, #ff5ca8, #ffb13d, #3ddc97, #2f8cff, #9b6bff, #ff5ca8);
+  background-size: 300% 100%;
+  animation: hue-flow 6s linear infinite;
+  box-shadow: 0 18px 36px -18px rgba(255, 92, 168, 0.8);
+}
+.card-cta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  animation: shine 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+.card-cta .card-tab {
+  background: rgba(255, 255, 255, 0.2);
+  animation: pulse-ring 2.2s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-cta, .card-cta::after, .card-cta .card-tab {
+    animation: none;
+  }
+}
+
+/* News: skeleton shimmer and bottom-sheet reader. */
+@keyframes shimmer {
+  0% { background-position: 150% 0; }
+  100% { background-position: -50% 0; }
+}
+.skeleton {
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--color-panel-2) 0%, #24375a 45%, var(--color-panel-2) 90%);
+  background-size: 200% 100%;
+  animation: shimmer 1.3s ease-in-out infinite;
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sheet-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+/* No fill-mode on the "in" animations so inline drag transforms can apply afterwards. */
+.fade-in {
+  animation: fade-in 0.25s ease;
+}
+.fade-out {
+  animation: fade-in 0.26s ease reverse forwards;
+}
+.sheet-in {
+  animation: sheet-in 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 0.2s ease;
+}
+.sheet-out {
+  animation: sheet-in 0.26s cubic-bezier(0.5, 0, 0.75, 0) reverse forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton, .sheet-in, .sheet-out, .fade-in, .fade-out {
+    animation-duration: 0.01ms;
+  }
+}
+
+
+/* Search fields draw their own clear (×) button. */
+input[type='search']::-webkit-search-cancel-button,
+input[type='search']::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
