@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm'
 import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 
 // One row per mobile top-up paid through Telegram Payments.
@@ -189,7 +190,9 @@ export const documents = pgTable(
 )
 
 // Bot broadcasts. Sent in small batches (cursor = last processed telegram_user_id) so a long
-// mailing never hits the function timeout. status: draft | sending | done.
+// mailing never hits the function timeout. status: scheduled | sending | done.
+// audience: all | active7 | active30 | new7. Planned mailings (scheduled_at set) are sent by the
+// "broadcasts" automation module once their time comes.
 export const broadcasts = pgTable('broadcasts', {
   id: uuid().primaryKey().defaultRandom(),
   text: text().notNull(),
@@ -200,7 +203,61 @@ export const broadcasts = pgTable('broadcasts', {
   sent: integer().notNull().default(0),
   failed: integer().notNull().default(0),
   cursor: text().notNull().default(''),
+  audience: text().notNull().default('all'),
+  scheduledAt: timestamp('scheduled_at'),
   createdBy: text('created_by').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   finishedAt: timestamp('finished_at'),
 })
+
+// Automation job queue (src/server/automation/engine.ts). Jobs run in short steps; `state` is the
+// checkpoint between steps, so a paused, interrupted or retried job continues where it stopped.
+// status: queued | running | paused | done | failed | cancelled. trigger: schedule | manual | event.
+export const automationJobs = pgTable(
+  'automation_jobs',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    module: text().notNull(),
+    lockGroup: text('lock_group').notNull(),
+    trigger: text().notNull(),
+    status: text().notNull().default('queued'),
+    progress: integer().notNull().default(0),
+    progressText: text('progress_text').notNull().default(''),
+    state: jsonb().notNull().default({}),
+    result: jsonb(),
+    summary: text().notNull().default(''),
+    error: text().notNull().default(''),
+    attempts: integer().notNull().default(0),
+    createdBy: text('created_by').notNull().default(''),
+    scheduledFor: timestamp('scheduled_for'),
+    startedAt: timestamp('started_at'),
+    heartbeatAt: timestamp('heartbeat_at'),
+    finishedAt: timestamp('finished_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => [
+    // Never two unfinished jobs for the same module…
+    uniqueIndex('automation_jobs_module_open_idx').on(t.module).where(sql`status in ('queued', 'running', 'paused')`),
+    // …and never two running jobs that conflict (e.g. everything that sends Telegram messages).
+    uniqueIndex('automation_jobs_lock_running_idx').on(t.lockGroup).where(sql`status = 'running'`),
+    index('automation_jobs_module_created_idx').on(t.module, t.createdAt),
+    index('automation_jobs_status_idx').on(t.status, t.createdAt),
+  ],
+)
+
+// Events for the automation modules: security signals recorded at their source (refused admin
+// access, wrong webhook secret, blocked users), module findings and errors. level: info | warn | error.
+export const automationEvents = pgTable(
+  'automation_events',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    module: text().notNull(),
+    level: text().notNull().default('info'),
+    kind: text().notNull(),
+    message: text().notNull(),
+    details: jsonb().notNull().default({}),
+    jobId: uuid('job_id'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => [index('automation_events_created_idx').on(t.createdAt), index('automation_events_kind_idx').on(t.kind, t.createdAt)],
+)
