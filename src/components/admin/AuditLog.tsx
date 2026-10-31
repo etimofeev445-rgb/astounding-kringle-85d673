@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useAdminQuery } from './api'
 import { Btn, Chips, Empty, ErrorBox, Loading, Title } from './ui'
 
-type Group = 'all' | 'login' | 'users' | 'listings' | 'settings' | 'broadcasts' | 'orders'
+type Group = 'all' | 'login' | 'users' | 'listings' | 'settings' | 'broadcasts' | 'orders' | 'automation'
 
 const ACTIONS: Record<string, string> = {
   'admin.login': 'Вхід в адмін-панель',
@@ -30,6 +30,15 @@ const ACTIONS: Record<string, string> = {
   'broadcast.stop': 'Розсилку зупинено',
   'order.manual_fulfilled': 'Поповнення підтверджено вручну',
   'webhook.setup': 'Встановлено webhook',
+  'broadcast.schedule': 'Заплановано розсилку',
+  'automation.update': 'Змінено автоматизацію',
+  'automation.run': 'Запущено модуль автоматизації',
+  'automation.job_pause': 'Задачу призупинено',
+  'automation.job_resume': 'Задачу продовжено',
+  'automation.job_cancel': 'Задачу скасовано',
+  'automation.test_notify': 'Тестове сповіщення',
+  'support.reply': 'Відповідь у підтримці',
+  'support.close': 'Звернення закрито',
 }
 
 const summary = (d: Record<string, unknown>) =>
@@ -56,6 +65,7 @@ export default function AuditLog() {
           { value: 'settings', label: 'Налаштування' },
           { value: 'broadcasts', label: 'Розсилки' },
           { value: 'orders', label: 'Поповнення' },
+          { value: 'automation', label: 'Автоматизація' },
         ]}
       />
       {list.error ? (

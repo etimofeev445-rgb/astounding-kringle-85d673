@@ -6,6 +6,8 @@ import { AD_LIMITS, type AdInput, type AdView } from '../lib/ads'
 import { deletePhoto, savePhoto } from './adPhotos'
 import { adView, decodePhoto, parseAdInput, post, priceText, repost, unpost } from './adsChannel'
 import { isBlocked, loadConfig } from './appState'
+import { checkNow } from './automation/modules/adcheck'
+import { recordEvent } from './automation/store'
 import { adsChannel, verifyInitData } from './telegramBot'
 
 export type AdResult =
@@ -43,7 +45,10 @@ export const saveAd = createServerFn({ method: 'POST' })
     const input = parseAdInput(data.ad)
     const photo = decodePhoto(data.photo)
     if (!input || photo === 'invalid') return { ok: false, reason: 'invalid' }
-    if (await isBlocked(userId)) return { ok: false, reason: 'blocked' }
+    if (await isBlocked(userId)) {
+      await recordEvent('security', 'warn', 'security.blocked_action', `Заблокований користувач ID ${userId} намагався опублікувати оголошення`, { userId, action: 'ad' })
+      return { ok: false, reason: 'blocked' }
+    }
 
     if (!data.id) {
       if (!(await loadConfig()).features.adsPosting) return { ok: false, reason: 'disabled' }
@@ -64,6 +69,7 @@ export const saveAd = createServerFn({ method: 'POST' })
         .set({ channelChatId: messageId ? adsChannel() : null, channelMessageId: messageId })
         .where(eq(ads.id, ad.id))
         .returning()
+      await checkNow('ad', saved.id)
       return { ok: true, ad: adView(saved, userId), published: !!messageId }
     }
 
@@ -93,6 +99,7 @@ export const saveAd = createServerFn({ method: 'POST' })
       .update(cartItems)
       .set({ title: saved.title, subtitle: priceText(saved.price) })
       .where(and(eq(cartItems.kind, 'ad'), eq(cartItems.ref, saved.id)))
+    await checkNow('ad', saved.id)
     return { ok: true, ad: adView(saved, userId), published: !!messageId }
   })
 

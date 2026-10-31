@@ -6,6 +6,7 @@ import { parseAdInput, post, repost, unpost } from '../adsChannel'
 import { postUrl as placePostUrl, publish, sync, withdraw } from '../catalogChannel'
 import { parsePlaceInput } from '../placeView'
 import { adsChannel } from '../telegramBot'
+import { AUTO_REPORTER } from '../../lib/automation'
 import { InputError, int, isUuid, like, log, obj, str, type Admin } from './util'
 
 // Moderation of both kinds of user content: classified ads and catalog (business) cards.
@@ -152,6 +153,16 @@ export async function listListings(_: Admin, p: unknown) {
     case 'deleted':
       conds.push(eq(t.status, 'deleted'))
       break
+    // Moderation queue of the automatic check: items with an open "🤖 Автоперевірка" report.
+    case 'flagged': {
+      const flagged = await db
+        .selectDistinct({ id: reports.targetId })
+        .from(reports)
+        .where(and(eq(reports.targetKind, kind), eq(reports.status, 'open'), eq(reports.telegramUserId, AUTO_REPORTER)))
+      if (!flagged.length) return { items: [], total: 0, pageSize: PAGE }
+      conds.push(inArray(t.id, flagged.map((r) => r.id)))
+      break
+    }
     case 'reported': {
       const reported = await db
         .selectDistinct({ id: reports.targetId })
@@ -329,7 +340,7 @@ export async function listReports(_: Admin, p: unknown) {
     targetStatus: targets.get(r.targetId)?.status ?? 'unknown',
     reason: r.reason,
     status: r.status,
-    reporter: names.get(r.telegramUserId) || `ID ${r.telegramUserId}`,
+    reporter: r.telegramUserId === AUTO_REPORTER ? '🤖 Автоперевірка' : names.get(r.telegramUserId) || `ID ${r.telegramUserId}`,
     reporterId: r.telegramUserId,
     createdAt: r.createdAt.toISOString(),
   }))

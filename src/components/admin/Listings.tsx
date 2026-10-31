@@ -7,7 +7,7 @@ import { adminCall, useAdminQuery } from './api'
 import { Badge, Btn, Chips, Empty, ErrorBox, Field, Loading, Panel, Title, aInput, dt, useAction } from './ui'
 
 type Kind = 'ad' | 'place'
-type Filter = 'pending' | 'reported' | 'approved' | 'rejected' | 'deleted' | 'all'
+type Filter = 'pending' | 'flagged' | 'reported' | 'approved' | 'rejected' | 'deleted' | 'all'
 type Tab = Kind | 'reports'
 
 export default function Listings() {
@@ -63,6 +63,7 @@ function ListingList({ kind }: { kind: Kind }) {
         onChange={(f) => (setFilter(f), setOffset(0))}
         options={[
           { value: 'pending', label: 'На перевірці' },
+          { value: 'flagged', label: '🤖 Автоперевірка' },
           { value: 'reported', label: 'Зі скаргами' },
           { value: 'approved', label: 'Схвалені' },
           { value: 'rejected', label: 'Відхилені' },

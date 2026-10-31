@@ -4,6 +4,7 @@ import { db } from '../../../../db/index.js'
 import { topupOrders } from '../../../../db/schema.js'
 import { OPERATORS, formatLocal } from '../../../data/operators'
 import { fulfillTopup } from '../../../server/aggregator'
+import { recordError, recordEvent } from '../../../server/automation/store'
 import { adminChatId, botApi, safeEqual, sendMessage, webhookSecret } from '../../../server/telegramBot'
 
 interface Update {
@@ -147,6 +148,7 @@ export const Route = createFileRoute('/api/telegram/webhook')({
         const secret = webhookSecret()
         // Telegram sends the secret in a header (set via setWebhook secret_token), never in the URL.
         if (!secret || !safeEqual(request.headers.get('x-telegram-bot-api-secret-token') ?? '', secret)) {
+          if (secret) await recordEvent('security', 'warn', 'security.webhook_secret', 'Запит до Telegram webhook з невірним секретом')
           return new Response('Forbidden', { status: 403 })
         }
         const update = (await request.json().catch(() => ({}))) as Update
@@ -158,6 +160,7 @@ export const Route = createFileRoute('/api/telegram/webhook')({
           } catch (e) {
             // The payment isn't stored yet: a non-2xx makes Telegram retry this update later.
             console.error('Record payment error:', e)
+            await recordError('webhook.recordPayment', e)
             return new Response('retry', { status: 500 })
           }
           try {
@@ -165,6 +168,7 @@ export const Route = createFileRoute('/api/telegram/webhook')({
           } catch (e) {
             // Payment is safely recorded; the order stays paid/processing for the admin to finish.
             console.error('Fulfill error:', e)
+            await recordError('webhook.fulfill', e)
             await sendMessage(adminChatId(), `⚠️ Оплачене замовлення ${order?.id} не оброблено автоматично — перевірте в адмін-панелі.`)
           }
           return new Response('ok')

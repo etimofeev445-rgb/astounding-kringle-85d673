@@ -1,4 +1,4 @@
-import { ChevronRight, ExternalLink, MapPinPlus, Megaphone, ShieldCheck } from 'lucide-react'
+import { ChevronRight, ExternalLink, LifeBuoy, MapPinPlus, Megaphone, ShieldCheck } from 'lucide-react'
 import { useAppConfig } from '../../lib/appState'
 import { SERVICES } from '../../data/links'
 import { useI18n } from '../../lib/i18n'
@@ -106,6 +106,20 @@ export default function MenuScreen({ go, addPlace, openAdmin }: { go: Go; addPla
           </div>
         ))}
       </div>
+
+      {available('support') && (
+        <button
+          onClick={() => go('support')}
+          className="tap rise w-full mb-6 flex items-center gap-3 rounded-3xl bg-panel/90 border border-line px-4 py-3 text-left"
+        >
+          <LifeBuoy size={22} className="text-sky shrink-0" />
+          <span className="flex-1 min-w-0">
+            <span className="block font-semibold">{t({ uk: 'Підтримка', ru: 'Поддержка' })}</span>
+            <span className="block text-xs text-mute truncate">{t({ uk: 'Чат з AI-консультантом і адміністратором', ru: 'Чат с AI-консультантом и администратором' })}</span>
+          </span>
+          <ChevronRight size={18} className="text-mute" />
+        </button>
+      )}
 
       <h2 className="text-xs font-semibold uppercase tracking-wider text-mute mb-2 px-1">
         {t({ uk: 'Розділи', ru: 'Разделы' })}

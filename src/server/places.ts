@@ -9,6 +9,8 @@ import { parsePlaceInput, placeView } from './placeView'
 import { publish, sync, withdraw, type NewImages } from './catalogChannel'
 import { deletePlacePhoto, savePlacePhoto } from './placePhotos'
 import { isBlocked, loadConfig } from './appState'
+import { checkNow } from './automation/modules/adcheck'
+import { recordError, recordEvent } from './automation/store'
 import { verifyInitData, verifyInitUser } from './telegramBot'
 
 // Catalog cards. "Опублікувати" posts the card to the Telegram catalog channel; the row here only
@@ -87,6 +89,7 @@ export const savePlace = createServerFn({ method: 'POST' })
       return data.id ? await updatePlace({ ...data, id: data.id }) : await createPlace(data)
     } catch (e) {
       console.error('Save place error:', e)
+      await recordError('savePlace', e)
       return { ok: false, reason: 'server' }
     }
   })
@@ -112,11 +115,16 @@ function prepare(data: SaveData) {
   return { user, input, storeKey, photo, cover }
 }
 
+async function blocked(userId: string): Promise<PlaceResult> {
+  await recordEvent('security', 'warn', 'security.blocked_action', `Заблокований користувач ID ${userId} намагався опублікувати картку бізнесу`, { userId, action: 'place' })
+  return { ok: false, reason: 'blocked' }
+}
+
 async function createPlace(data: SaveData): Promise<PlaceResult> {
   const r = prepare(data)
   if ('error' in r) return { ok: false, reason: r.error! }
   const { user, input, storeKey, photo, cover } = r
-  if (await isBlocked(user.id)) return { ok: false, reason: 'blocked' }
+  if (await isBlocked(user.id)) return blocked(user.id)
   if (!(await loadConfig()).features.catalogPosting) return { ok: false, reason: 'disabled' }
   const [{ n }] = await db
     .select({ n: count() })
@@ -138,6 +146,7 @@ async function createPlace(data: SaveData): Promise<PlaceResult> {
       .set({ channelChatId: post.chatId, channelMessageIds: post.ids })
       .where(eq(places.id, row.id))
       .returning()
+    await checkNow('place', saved.id)
     return { ok: true, place: placeView(saved, user.id), published: true }
   } catch (e) {
     // No channel post → no card: the feed only shows what is actually in the channel.
@@ -154,7 +163,7 @@ async function updatePlace(data: SaveData & { id: string }): Promise<PlaceResult
   if ('error' in r) return { ok: false, reason: r.error! }
   const { user, input, storeKey, photo, cover } = r
   if (!isUuid(data.id)) return { ok: false, reason: 'not_found' }
-  if (await isBlocked(user.id)) return { ok: false, reason: 'blocked' }
+  if (await isBlocked(user.id)) return blocked(user.id)
   // Only the author (same Telegram ID) can edit a card.
   const [prev] = await db
     .select()
@@ -185,6 +194,7 @@ async function updatePlace(data: SaveData & { id: string }): Promise<PlaceResult
     .update(places)
     .set({ storeKey })
     .where(and(eq(places.telegramUserId, user.id), eq(places.status, 'active')))
+  await checkNow('place', saved.id)
   return { ok: true, place: placeView(saved, user.id), published: !!post }
 }
 

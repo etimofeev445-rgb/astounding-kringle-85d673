@@ -1,5 +1,5 @@
 import {
-  Bell, ClipboardList, FileText, Home, LayoutDashboard, LayoutList, LogOut, Megaphone, Settings, ShieldAlert,
+  Bell, Bot, ClipboardList, FileText, Home, LayoutDashboard, LayoutList, LifeBuoy, LogOut, Megaphone, Settings, ShieldAlert,
   ShieldCheck, Users as UsersIcon, Wallet,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -8,6 +8,7 @@ import { setAppConfig } from '../../lib/appState'
 import { haptic, tg } from '../../lib/telegram'
 import { adminCall, setAuthLostHandler, useAdminQuery } from './api'
 import AuditLog from './AuditLog'
+import Automation from './Automation'
 import Dashboard from './Dashboard'
 import DocumentsAdmin from './DocumentsAdmin'
 import { HomeEditor, MenuEditor } from './ConfigEditors'
@@ -15,13 +16,16 @@ import Listings from './Listings'
 import Notifications from './Notifications'
 import Orders from './Orders'
 import SettingsAdmin from './SettingsAdmin'
+import SupportAdmin from './SupportAdmin'
 import { ErrorBox, Loading } from './ui'
 import Users from './Users'
 
-export type Section = 'dashboard' | 'users' | 'listings' | 'home' | 'menu' | 'notify' | 'docs' | 'orders' | 'settings' | 'log'
+export type Section = 'dashboard' | 'auto' | 'support' | 'users' | 'listings' | 'home' | 'menu' | 'notify' | 'docs' | 'orders' | 'settings' | 'log'
 
 const SECTIONS: { id: Section; label: string; Icon: typeof Home }[] = [
   { id: 'dashboard', label: 'Огляд', Icon: LayoutDashboard },
+  { id: 'auto', label: 'Автоматизація', Icon: Bot },
+  { id: 'support', label: 'Підтримка', Icon: LifeBuoy },
   { id: 'users', label: 'Користувачі', Icon: UsersIcon },
   { id: 'listings', label: 'Оголошення', Icon: Megaphone },
   { id: 'home', label: 'Головна', Icon: Home },
@@ -116,6 +120,8 @@ export default function AdminApp({ onExit }: { onExit: () => void }) {
         ) : (
           <div key={section} className="rise">
             {section === 'dashboard' && <Dashboard env={session.data.env} go={go} />}
+            {section === 'auto' && <Automation />}
+            {section === 'support' && <SupportAdmin />}
             {section === 'users' && <Users />}
             {section === 'listings' && <Listings />}
             {section === 'notify' && <Notifications />}

@@ -5,6 +5,7 @@ import { ads, appEvents, documents, places, reports, users } from '../../db/sche
 import { DEFAULT_CONFIG, type AppConfig } from '../lib/appConfig'
 import { isAdminId } from './adminAuth'
 import { isBlocked, loadConfig } from './appState'
+import { recordError, recordEvent } from './automation/store'
 import { verifyInitData, verifyInitUser } from './telegramBot'
 
 export interface DocView {
@@ -75,7 +76,10 @@ export const reportContent = createServerFn({ method: 'POST' })
     if (!data.kind || !isUuid(data.id) || !data.reason) return { ok: false, reason: 'invalid' }
     try {
       if (!(await loadConfig()).features.reports) return { ok: false, reason: 'disabled' }
-      if (await isBlocked(userId)) return { ok: false, reason: 'blocked' }
+      if (await isBlocked(userId)) {
+        await recordEvent('security', 'warn', 'security.blocked_action', `Заблокований користувач ID ${userId} намагався поскаржитися`, { userId, action: 'report' })
+        return { ok: false, reason: 'blocked' }
+      }
       const table = data.kind === 'ad' ? ads : places
       const [target] = await db
         .select({ id: table.id })
@@ -89,6 +93,7 @@ export const reportContent = createServerFn({ method: 'POST' })
       return { ok: true }
     } catch (e) {
       console.error('Report error:', e)
+      await recordError('reportContent', e)
       return { ok: false, reason: 'server' }
     }
   })

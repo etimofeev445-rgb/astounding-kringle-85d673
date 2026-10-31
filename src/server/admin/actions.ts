@@ -1,3 +1,4 @@
+import * as automation from './automation'
 import * as content from './content'
 import * as listings from './listings'
 import * as system from './system'
@@ -25,6 +26,7 @@ export const ACTIONS = {
   'docs.save': content.saveDoc,
   'docs.delete': content.deleteDoc,
   'broadcasts.list': content.listBroadcasts,
+  'broadcasts.preview': content.previewBroadcast,
   'broadcasts.test': content.testBroadcast,
   'broadcasts.create': content.createBroadcast,
   'broadcasts.send': content.sendBroadcastBatch,
@@ -34,6 +36,19 @@ export const ACTIONS = {
   'orders.fulfill': system.markOrderFulfilled,
   'webhook.get': system.getWebhook,
   'webhook.setup': system.resetWebhook,
+  'automation.get': automation.overview,
+  'automation.save': automation.saveAutomation,
+  'automation.run': automation.runNow,
+  'automation.job': automation.jobControl,
+  'automation.jobs': automation.listJobs,
+  'automation.result': automation.jobResult,
+  'automation.events': automation.listEvents,
+  'automation.testNotify': automation.testNotification,
+  'automation.daily': automation.previewDaily,
+  'support.list': automation.listTickets,
+  'support.get': automation.getTicket,
+  'support.reply': automation.replyTicket,
+  'support.close': automation.closeTicketAction,
 } satisfies Record<string, (admin: Admin, payload: unknown) => Promise<unknown>>
 
 export type AdminActions = typeof ACTIONS
