@@ -1,9 +1,11 @@
 import { getStore } from '@netlify/blobs'
-import { and, asc, count, desc, eq, gt, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray } from 'drizzle-orm'
 import { db } from '../../../db/index.js'
-import { appSettings, broadcasts, documents, users } from '../../../db/schema.js'
+import { appSettings, broadcasts, documents } from '../../../db/schema.js'
 import { isHttpsUrl, sanitizeConfig } from '../../lib/appConfig'
+import { isAudience, type BroadcastAudience } from '../../lib/automation'
 import { loadConfig } from '../appState'
+import { broadcastMessage, countRecipients, sendNextBatch } from '../broadcasting'
 import { TelegramError, botApi } from '../telegramBot'
 import { InputError, int, isUuid, iso, log, obj, str, type Admin } from './util'
 
@@ -97,14 +99,6 @@ export async function deleteDoc(admin: Admin, p: unknown) {
 
 // ── Bot broadcasts ───────────────────────────────────────────────────────────────────────────
 
-function message(o: { text: string; buttonText: string; buttonUrl: string }) {
-  return {
-    text: o.text,
-    link_preview_options: { is_disabled: true },
-    ...(o.buttonText && o.buttonUrl ? { reply_markup: { inline_keyboard: [[{ text: o.buttonText, url: o.buttonUrl }]] } } : {}),
-  }
-}
-
 function parseMessage(p: unknown) {
   const o = obj(p)
   const text = str(o.text, 4000)
@@ -115,7 +109,7 @@ function parseMessage(p: unknown) {
   return { text, buttonText: buttonUrl ? buttonText : '', buttonUrl: buttonText ? buttonUrl : '' }
 }
 
-const recipients = () => eq(users.blocked, false)
+const audienceOf = (v: unknown): BroadcastAudience => (isAudience(v) ? v : 'all')
 
 const broadcastView = (b: typeof broadcasts.$inferSelect) => ({
   id: b.id,
@@ -123,6 +117,8 @@ const broadcastView = (b: typeof broadcasts.$inferSelect) => ({
   buttonText: b.buttonText,
   buttonUrl: b.buttonUrl,
   status: b.status,
+  audience: b.audience,
+  scheduledAt: iso(b.scheduledAt),
   total: b.total,
   sent: b.sent,
   failed: b.failed,
@@ -131,18 +127,25 @@ const broadcastView = (b: typeof broadcasts.$inferSelect) => ({
 })
 
 export async function listBroadcasts() {
-  const [rows, [{ n }]] = await Promise.all([
+  const [rows, audience] = await Promise.all([
     db.select().from(broadcasts).orderBy(desc(broadcasts.createdAt)).limit(30),
-    db.select({ n: count() }).from(users).where(recipients()),
+    countRecipients('all'),
   ])
-  return { items: rows.map(broadcastView), audience: n }
+  return { items: rows.map(broadcastView), audience }
+}
+
+// Review step before the confirmation: how many users the chosen audience reaches right now.
+export async function previewBroadcast(_: Admin, p: unknown) {
+  const msg = parseMessage(p)
+  const audience = audienceOf(obj(p).audience)
+  return { ...msg, audience, recipients: await countRecipients(audience) }
 }
 
 // Sends the message to the admin's own chat so it can be checked in Telegram before the mailing.
 export async function testBroadcast(admin: Admin, p: unknown) {
   const msg = parseMessage(p)
   try {
-    await botApi('sendMessage', { chat_id: admin.id, ...message(msg) })
+    await botApi('sendMessage', { chat_id: admin.id, ...broadcastMessage(msg) })
   } catch (e) {
     throw new InputError(
       e instanceof TelegramError && e.code === 403
@@ -154,94 +157,56 @@ export async function testBroadcast(admin: Admin, p: unknown) {
   return { ok: true }
 }
 
-// Creating the mailing is the confirmed step; batches are then pulled by sendBroadcastBatch.
+// Creating the mailing is the confirmed step. The server accepts it only with an explicit
+// confirmation of the recipient count the admin was shown, and only if that count is still current.
+// Immediate mailings are then pulled batch by batch by the panel (sendBroadcastBatch); planned ones
+// (scheduledAt) are started by the "broadcasts" automation module.
 export async function createBroadcast(admin: Admin, p: unknown) {
+  const o = obj(p)
   const msg = parseMessage(p)
-  if (obj(p).confirm !== true) throw new InputError('Потрібне підтвердження розсилки')
-  const [{ n }] = await db.select({ n: count() }).from(users).where(recipients())
+  const audience = audienceOf(o.audience)
+  if (o.confirm !== true) throw new InputError('Потрібне підтвердження розсилки')
+  const n = await countRecipients(audience)
+  if (o.recipients !== n) throw new InputError(`Кількість одержувачів змінилася (${n}). Перегляньте розсилку й підтвердьте ще раз.`)
+  if (!n) throw new InputError('У вибраній аудиторії немає одержувачів')
+  let scheduledAt: Date | null = null
+  if (o.scheduledAt) {
+    scheduledAt = new Date(String(o.scheduledAt))
+    if (Number.isNaN(scheduledAt.getTime())) throw new InputError('Невірний час розсилки')
+    if (scheduledAt.getTime() < Date.now() - 60_000) throw new InputError('Час розсилки вже минув')
+    if (scheduledAt.getTime() > Date.now() + 90 * 86400_000) throw new InputError('Можна планувати не далі ніж на 90 днів')
+  }
   const [row] = await db
     .insert(broadcasts)
-    .values({ ...msg, status: 'sending', total: n, createdBy: admin.id })
+    .values({ ...msg, audience, scheduledAt, status: scheduledAt ? 'scheduled' : 'sending', total: n, createdBy: admin.id })
     .returning()
-  await log(admin, 'broadcast.create', 'broadcast', row.id, { total: n, text: msg.text.slice(0, 200) })
+  await log(admin, scheduledAt ? 'broadcast.schedule' : 'broadcast.create', 'broadcast', row.id, {
+    total: n,
+    audience,
+    scheduledAt: iso(scheduledAt),
+    text: msg.text.slice(0, 200),
+  })
   return broadcastView(row)
 }
 
-const BATCH = 20
-
-// Sends the next batch. The batch is claimed by moving the cursor first (compare-and-set), so two
-// open panels can't send the same messages twice.
 export async function sendBroadcastBatch(admin: Admin, p: unknown) {
   const id = obj(p).id
   if (!isUuid(id)) throw new InputError('Невірний ID')
   const [b] = await db.select().from(broadcasts).where(eq(broadcasts.id, id))
   if (!b) throw new InputError('Розсилку не знайдено')
-  if (b.status !== 'sending') return { broadcast: broadcastView(b), retryAfter: 0 }
-
-  const batch = await db
-    .select({ id: users.telegramUserId })
-    .from(users)
-    .where(and(recipients(), gt(users.telegramUserId, b.cursor)))
-    .orderBy(asc(users.telegramUserId))
-    .limit(BATCH)
-
-  if (!batch.length) {
-    const [done] = await db
-      .update(broadcasts)
-      .set({ status: 'done', finishedAt: new Date() })
-      .where(and(eq(broadcasts.id, b.id), eq(broadcasts.status, 'sending')))
-      .returning()
-    if (done) await log(admin, 'broadcast.done', 'broadcast', b.id, { sent: done.sent, failed: done.failed })
-    return { broadcast: broadcastView(done ?? b), retryAfter: 0 }
-  }
-
-  const [claimed] = await db
-    .update(broadcasts)
-    .set({ cursor: batch[batch.length - 1].id })
-    .where(and(eq(broadcasts.id, b.id), eq(broadcasts.cursor, b.cursor), eq(broadcasts.status, 'sending')))
-    .returning()
-  if (!claimed) {
-    const [now] = await db.select().from(broadcasts).where(eq(broadcasts.id, b.id))
-    return { broadcast: broadcastView(now), retryAfter: 1 }
-  }
-
-  const payload = message(b)
-  let sent = 0
-  let failed = 0
-  let retryAfter = 0
-  for (const [i, u] of batch.entries()) {
-    try {
-      await botApi('sendMessage', { chat_id: u.id, ...payload })
-      sent++
-    } catch (e) {
-      if (e instanceof TelegramError && e.code === 429) {
-        // Flood limit: hand the unsent rest of the batch back by rewinding the cursor.
-        retryAfter = Number(/retry after (\d+)/i.exec(e.message)?.[1] ?? 5)
-        await db
-          .update(broadcasts)
-          .set({ cursor: i === 0 ? b.cursor : batch[i - 1].id })
-          .where(eq(broadcasts.id, b.id))
-        break
-      }
-      // 403 = the user never started the bot or blocked it; 400 = chat not found.
-      failed++
-    }
-  }
-  const [row] = await db
-    .update(broadcasts)
-    .set({ sent: sql`${broadcasts.sent} + ${sent}`, failed: sql`${broadcasts.failed} + ${failed}` })
-    .where(eq(broadcasts.id, b.id))
-    .returning()
-  return { broadcast: broadcastView(row), retryAfter }
+  const r = await sendNextBatch(b)
+  if (r.finished) await log(admin, 'broadcast.done', 'broadcast', b.id, { sent: r.broadcast.sent, failed: r.broadcast.failed })
+  return { broadcast: broadcastView(r.broadcast), retryAfter: r.retryAfter }
 }
 
+// Ends a mailing that is being sent, or cancels a planned one before it starts.
 export async function stopBroadcast(admin: Admin, p: unknown) {
   const id = obj(p).id
   if (!isUuid(id)) throw new InputError('Невірний ID')
   const [row] = await db
     .update(broadcasts)
     .set({ status: 'done', finishedAt: new Date() })
-    .where(and(eq(broadcasts.id, id), eq(broadcasts.status, 'sending')))
+    .where(and(eq(broadcasts.id, id), inArray(broadcasts.status, ['sending', 'scheduled'])))
     .returning()
   if (row) await log(admin, 'broadcast.stop', 'broadcast', id, { sent: row.sent, failed: row.failed })
   return { ok: true }
