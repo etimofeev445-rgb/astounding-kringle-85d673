@@ -1,12 +1,19 @@
-import { ChevronRight, ExternalLink, MapPinPlus, Megaphone } from 'lucide-react'
+import { ChevronRight, ExternalLink, MapPinPlus, Megaphone, ShieldCheck } from 'lucide-react'
+import { useAppConfig } from '../../lib/appState'
 import { SERVICES } from '../../data/links'
 import { useI18n } from '../../lib/i18n'
 import { SCREENS, type Go } from '../../lib/nav'
 import { haptic, openLink } from '../../lib/telegram'
 import { CartToggle, ScreenTitle } from '../ui'
 
-export default function MenuScreen({ go, addPlace }: { go: Go; addPlace: () => void }) {
+export default function MenuScreen({ go, addPlace, openAdmin }: { go: Go; addPlace: () => void; openAdmin?: () => void }) {
   const { t } = useI18n()
+  const { menu, features } = useAppConfig()
+  const available = (id: (typeof SCREENS)[number]['id']) => !menu.disabledScreens.includes(id)
+  const items = menu.items
+    .filter((i) => i.enabled && available(i.id))
+    .map((i) => SCREENS.find((s) => s.id === i.id)!)
+    .filter(Boolean)
 
   return (
     <div>
@@ -15,6 +22,18 @@ export default function MenuScreen({ go, addPlace }: { go: Go; addPlace: () => v
         subtitle={t({ uk: 'Сервіси та розділи застосунку', ru: 'Сервисы и разделы приложения' })}
       />
 
+      {openAdmin && (
+        <button
+          onClick={openAdmin}
+          className="tap rise w-full mb-4 flex items-center gap-3 rounded-2xl border border-adm/40 bg-adm/10 px-4 py-3 text-left"
+        >
+          <ShieldCheck size={20} className="text-adm shrink-0" />
+          <span className="flex-1 font-semibold">Адмін-панель</span>
+          <ChevronRight size={18} className="text-adm" />
+        </button>
+      )}
+
+      {available('ads') && (
       <button
         onClick={() => go('ads')}
         className="tap rise glow-btn w-full text-left rounded-3xl p-4 mb-6 flex items-center gap-4 text-white"
@@ -30,7 +49,9 @@ export default function MenuScreen({ go, addPlace }: { go: Go; addPlace: () => v
         </div>
         <ChevronRight size={20} className="relative opacity-80" />
       </button>
+      )}
 
+      {available('map') && (
       <div className="grid grid-cols-2 gap-3 -mt-3 mb-6">
         <button
           onClick={() => go('map')}
@@ -40,14 +61,17 @@ export default function MenuScreen({ go, addPlace }: { go: Go; addPlace: () => v
           <div className="font-display font-bold mt-2">{t({ uk: 'Карта', ru: 'Карта' })}</div>
           <div className="text-xs text-mute mt-0.5">{t({ uk: 'Каталог бізнесів', ru: 'Каталог бизнесов' })}</div>
         </button>
-        <button
-          onClick={addPlace}
-          className="tap rise rounded-3xl bg-sky/15 border border-sky/40 p-4 text-left"
-        >
-          <MapPinPlus size={26} className="text-sky" />
-          <div className="font-display font-bold mt-2 leading-tight">{t({ uk: '+ Додати свій бізнес / оголошення', ru: '+ Добавить свой бизнес / объявление' })}</div>
-        </button>
+        {features.catalogPosting && (
+          <button
+            onClick={addPlace}
+            className="tap rise rounded-3xl bg-sky/15 border border-sky/40 p-4 text-left"
+          >
+            <MapPinPlus size={26} className="text-sky" />
+            <div className="font-display font-bold mt-2 leading-tight">{t({ uk: '+ Додати свій бізнес / оголошення', ru: '+ Добавить свой бизнес / объявление' })}</div>
+          </button>
+        )}
       </div>
+      )}
 
       <h2 className="text-xs font-semibold uppercase tracking-wider text-mute mb-2 px-1">
         {t({ uk: 'Доставка та таксі', ru: 'Доставка и такси' })}
@@ -87,7 +111,7 @@ export default function MenuScreen({ go, addPlace }: { go: Go; addPlace: () => v
         {t({ uk: 'Розділи', ru: 'Разделы' })}
       </h2>
       <div className="rounded-3xl bg-panel/90 border border-line divide-y divide-line overflow-hidden">
-        {SCREENS.map((s) => (
+        {items.map((s) => (
           <button
             key={s.id}
             onClick={() => go(s.id)}

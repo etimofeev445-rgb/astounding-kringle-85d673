@@ -3,7 +3,9 @@
 // shape — adjust it to the aggregator's documented API once the contract is signed.
 // Without these vars orders stay "paid" and the admin tops up manually.
 
-export type FulfillResult = { ok: true; ref: string } | { ok: false; error: string; manual?: boolean }
+// `uncertain`: the request may have reached the aggregator (timeout, 5xx), so the top-up may have
+// gone through — it must be checked with the aggregator before any retry.
+export type FulfillResult = { ok: true; ref: string } | { ok: false; error: string; manual?: boolean; uncertain?: boolean }
 
 export async function fulfillTopup(order: {
   id: string
@@ -18,7 +20,8 @@ export async function fulfillTopup(order: {
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+      // The order id doubles as an idempotency key so the aggregator can drop a duplicate request.
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${key}`, 'idempotency-key': order.id },
       body: JSON.stringify({
         order_id: order.id,
         operator: order.operator,
@@ -29,9 +32,9 @@ export async function fulfillTopup(order: {
       signal: AbortSignal.timeout(8000),
     })
     const body = (await res.json().catch(() => ({}))) as { id?: string | number; reference?: string; error?: string; message?: string }
-    if (!res.ok) return { ok: false, error: body.error ?? body.message ?? `HTTP ${res.status}` }
+    if (!res.ok) return { ok: false, error: body.error ?? body.message ?? `HTTP ${res.status}`, uncertain: res.status >= 500 }
     return { ok: true, ref: String(body.id ?? body.reference ?? '') }
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    return { ok: false, error: e instanceof Error ? e.message : String(e), uncertain: true }
   }
 }

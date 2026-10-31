@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiAssetsKeyRouteImport } from './routes/api/assets/$key'
 import { Route as ApiTelegramSetupRouteImport } from './routes/api/telegram/setup'
 import { Route as ApiTelegramWebhookRouteImport } from './routes/api/telegram/webhook'
 import { Route as ApiAdsPhotoIdRouteImport } from './routes/api/ads/photo/$id'
@@ -18,6 +19,11 @@ import { Route as ApiPlacesPhotoIdRouteImport } from './routes/api/places/photo/
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAssetsKeyRoute = ApiAssetsKeyRouteImport.update({
+  id: '/api/assets/$key',
+  path: '/api/assets/$key',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiTelegramSetupRoute = ApiTelegramSetupRouteImport.update({
@@ -43,6 +49,7 @@ const ApiPlacesPhotoIdRoute = ApiPlacesPhotoIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/assets/$key': typeof ApiAssetsKeyRoute
   '/api/telegram/setup': typeof ApiTelegramSetupRoute
   '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
   '/api/ads/photo/$id': typeof ApiAdsPhotoIdRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/assets/$key': typeof ApiAssetsKeyRoute
   '/api/telegram/setup': typeof ApiTelegramSetupRoute
   '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
   '/api/ads/photo/$id': typeof ApiAdsPhotoIdRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/assets/$key': typeof ApiAssetsKeyRoute
   '/api/telegram/setup': typeof ApiTelegramSetupRoute
   '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
   '/api/ads/photo/$id': typeof ApiAdsPhotoIdRoute
@@ -67,6 +76,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/api/assets/$key'
     | '/api/telegram/setup'
     | '/api/telegram/webhook'
     | '/api/ads/photo/$id'
@@ -74,6 +84,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/api/assets/$key'
     | '/api/telegram/setup'
     | '/api/telegram/webhook'
     | '/api/ads/photo/$id'
@@ -81,6 +92,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/api/assets/$key'
     | '/api/telegram/setup'
     | '/api/telegram/webhook'
     | '/api/ads/photo/$id'
@@ -89,6 +101,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiAssetsKeyRoute: typeof ApiAssetsKeyRoute
   ApiTelegramSetupRoute: typeof ApiTelegramSetupRoute
   ApiTelegramWebhookRoute: typeof ApiTelegramWebhookRoute
   ApiAdsPhotoIdRoute: typeof ApiAdsPhotoIdRoute
@@ -102,6 +115,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/assets/$key': {
+      id: '/api/assets/$key'
+      path: '/api/assets/$key'
+      fullPath: '/api/assets/$key'
+      preLoaderRoute: typeof ApiAssetsKeyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/telegram/setup': {
@@ -137,6 +157,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiAssetsKeyRoute: ApiAssetsKeyRoute,
   ApiTelegramSetupRoute: ApiTelegramSetupRoute,
   ApiTelegramWebhookRoute: ApiTelegramWebhookRoute,
   ApiAdsPhotoIdRoute: ApiAdsPhotoIdRoute,

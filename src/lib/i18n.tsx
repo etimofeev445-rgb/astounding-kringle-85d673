@@ -13,15 +13,15 @@ export const LANGS: { value: Lang; label: string }[] = [
 const KEY = 'uat-lang'
 const isLang = (v: unknown): v is Lang => v === 'uk' || v === 'ru'
 
-// Saved choice first, then the Telegram user's language; Ukrainian by default.
-function detect(): Lang {
+// Saved choice first, then the Telegram user's language, then the app default (set in the admin panel).
+function detect(fallback: Lang): Lang {
   try {
     const saved = localStorage.getItem(KEY)
     if (isLang(saved)) return saved
   } catch {}
   const code = tg()?.initDataUnsafe?.user?.language_code?.slice(0, 2)
-  if (code === 'ru') return 'ru'
-  return 'uk'
+  if (code === 'ru' || code === 'uk') return code
+  return fallback
 }
 
 interface I18n {
@@ -32,11 +32,11 @@ interface I18n {
 
 const Ctx = createContext<I18n>({ lang: 'uk', setLang: () => {}, t: (tr) => tr.uk })
 
-export function LangProvider({ children }: { children: ReactNode }) {
+export function LangProvider({ children, defaultLang = 'uk' }: { children: ReactNode; defaultLang?: Lang }) {
   // Server and first client render use Ukrainian to keep hydration stable.
   const [lang, setLangState] = useState<Lang>('uk')
 
-  useEffect(() => setLangState(detect()), [])
+  useEffect(() => setLangState(detect(defaultLang)), [defaultLang])
   useEffect(() => {
     document.documentElement.lang = lang
   }, [lang])

@@ -24,6 +24,8 @@ export type OpenTarget = {
   // 'store': storefront key; 'map': open the add form right away.
   store?: string
   mapAdd?: boolean
+  // 'map': preselected category filter.
+  mapCategory?: string
 }
 
 export default function SearchScreen({ open }: { open: (t: OpenTarget) => void }) {

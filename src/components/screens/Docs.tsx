@@ -1,5 +1,7 @@
-import { ExternalLink, MapPin } from 'lucide-react'
+import { ChevronDown, ExternalLink, FileText, MapPin } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { DP_PHONE, DP_SITE, dpCountries } from '../../data/dpdocument'
+import { listDocuments, type DocView } from '../../server/app'
 import { useI18n } from '../../lib/i18n'
 import { openLink } from '../../lib/telegram'
 import { Card, ScreenTitle } from '../ui'
@@ -14,6 +16,8 @@ export default function Docs() {
         title={t({ uk: 'ДП Документи', ru: 'ГП Документы' })}
         subtitle={`${t({ uk: 'Паспортний сервіс ДП «Документ»', ru: 'Паспортный сервис ГП «Документ»' })} · ${dpCountries.length} ${t({ uk: 'країн', ru: 'стран' })} · ${total} ${t({ uk: 'центрів', ru: 'центров' })}`}
       />
+
+      <Materials />
 
       <div className="space-y-3">
         {dpCountries.map((c, i) => (
@@ -59,5 +63,53 @@ export default function Docs() {
         </button>
       </Card>
     </div>
+  )
+}
+
+// Information materials published from the admin panel; hidden when there are none.
+function Materials() {
+  const { t } = useI18n()
+  const [docs, setDocs] = useState<DocView[]>([])
+  const [open, setOpen] = useState<string>()
+  useEffect(() => {
+    listDocuments()
+      .then(setDocs)
+      .catch((e) => console.error('Load documents error:', e))
+  }, [])
+  if (!docs.length) return null
+  return (
+    <section className="mb-5 rise">
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-mute mb-2 px-1">
+        {t({ uk: 'Корисні матеріали', ru: 'Полезные материалы' })}
+      </h2>
+      <div className="rounded-3xl bg-panel border border-line divide-y divide-line overflow-hidden">
+        {docs.map((d) => (
+          <div key={d.id}>
+            <button
+              onClick={() => setOpen(open === d.id ? undefined : d.id)}
+              aria-expanded={open === d.id}
+              className="tap w-full flex items-center gap-3 px-4 py-3 text-left"
+            >
+              <FileText size={18} className="text-sky shrink-0" />
+              <span className="flex-1 font-semibold">{d.title}</span>
+              <ChevronDown size={18} className={`text-mute transition-transform ${open === d.id ? 'rotate-180' : ''}`} />
+            </button>
+            {open === d.id && (
+              <div className="px-4 pb-4 -mt-1">
+                {d.body && <p className="text-sm text-white/85 whitespace-pre-line leading-relaxed">{d.body}</p>}
+                {d.url && (
+                  <button
+                    onClick={() => openLink(d.url)}
+                    className="tap mt-3 flex items-center gap-2 rounded-2xl bg-sky text-white px-4 py-2.5 text-sm font-bold"
+                  >
+                    <ExternalLink size={15} /> {t({ uk: 'Відкрити', ru: 'Открыть' })}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }

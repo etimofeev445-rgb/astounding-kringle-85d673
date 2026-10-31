@@ -1,56 +1,35 @@
 import {
-  Bus, ChevronDown, ChevronRight, CreditCard, Info, MapPin, Megaphone, RefreshCw, Search, Send,
-  ShoppingBag, SlidersHorizontal, Smartphone, Store, TrendingUp, Wrench,
+  Bus, ChevronDown, ChevronRight, CreditCard, Info, MapPin, Megaphone, Search, Send,
+  ShoppingBag, SlidersHorizontal, Smartphone, Store, Wrench,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { SCREENS, type Go, type Screen } from '../../lib/nav'
-import { FLAGS, useRates } from '../../lib/rates'
-import { nextHoliday } from '../../lib/holidays'
-import { LANGS, dayMonth, useI18n, type Tr } from '../../lib/i18n'
+import { LANGS, useI18n, type Tr } from '../../lib/i18n'
+import { categoryOrder, type HomeSection } from '../../lib/appConfig'
+import { useAppConfig } from '../../lib/appState'
 import { haptic, initData, openLink, userName } from '../../lib/telegram'
 import { usePlaces } from '../../lib/placesData'
-import { category } from '../../lib/places'
+import { category, type PlaceCategory } from '../../lib/places'
 import type { AdView } from '../../lib/ads'
 import { listAds } from '../../server/ads'
 import { FLIXBUS_URL } from '../../data/links'
-import { fmt } from '../ui'
 
-export default function Home({ go }: { go: Go }) {
-  const { data, reload } = useRates()
+export default function Home({ go, openMap }: { go: Go; openMap: (category: PlaceCategory) => void }) {
   const { lang, setLang, t } = useI18n()
+  const config = useAppConfig()
   const [name, setName] = useState<string>()
   useEffect(() => setName(userName()), [])
-  const next = useMemo(() => nextHoliday(), [])
-  const today = new Date()
 
-  const tiles = SCREENS.filter((s) => s.id !== 'search' && s.id !== 'cards' && s.id !== 'info')
-  const top = ['USD', 'EUR', 'PLN'].map((c) => data?.nbu.find((r) => r.code === c))
   const nextLang = LANGS[(LANGS.findIndex((l) => l.value === lang) + 1) % LANGS.length].value
+  const available = (id: Screen) => !config.menu.disabledScreens.includes(id)
+  const tiles = config.home.cards
+    .filter((c) => c.enabled && available(c.id))
+    .map((c) => SCREENS.find((s) => s.id === c.id)!)
+    .filter(Boolean)
+  const [brand, ...rest] = config.appName.split(' ')
 
-  return (
-    <div>
-      <header className="flex items-start justify-between mb-5 rise">
-        <div>
-          <p className="text-base text-white/80">{name
-              ? `${t({ uk: 'Привіт', ru: 'Привет' })}, ${name} 👋`
-              : t({ uk: 'Вітаємо 👋', ru: 'Добро пожаловать 👋' })}</p>
-          <h1 className="font-display text-4xl font-bold tracking-tight">
-            UAT <span className="text-sun">Market</span>
-          </h1>
-        </div>
-        <button
-          onClick={() => {
-            haptic()
-            setLang(nextLang)
-          }}
-          aria-label="Language"
-          className="tap mt-1 flex items-center gap-1 rounded-2xl px-3.5 py-2 font-display font-bold bg-sky text-white shadow-[inset_0_-6px_0_var(--color-sun)]"
-        >
-          {lang === 'uk' ? 'UA' : 'RU'}
-          <ChevronDown size={16} strokeWidth={3} />
-        </button>
-      </header>
-
+  const sections: Record<HomeSection, ReactNode> = {
+    search: available('search') && (
       <button
         onClick={() => go('search')}
         className="tap w-full flex items-center gap-3 rounded-2xl bg-panel/80 border border-line pl-4 pr-1.5 py-1.5 text-mute mb-5 rise"
@@ -63,81 +42,70 @@ export default function Home({ go }: { go: Go }) {
           <SlidersHorizontal size={18} />
         </span>
       </button>
-
-      <div className="rounded-3xl p-4 mb-4 rise bg-[linear-gradient(135deg,#1d5fd6,#2f8cff_55%,#4aa3ff)] shadow-[0_20px_40px_-20px_rgba(47,140,255,0.7)]">
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <button onClick={() => go('rates')} className="tap flex items-center gap-2 font-display text-sm font-bold uppercase">
-            <TrendingUp size={20} strokeWidth={2.4} />
-            {t({ uk: 'Курси валют', ru: 'Курсы валют' })}
-          </button>
-          <button
-            onClick={() => {
-              haptic()
-              reload()
-            }}
-            className="tap flex items-center gap-1.5 text-[11px] text-white/85"
-          >
-            {t({ uk: 'Оновлено', ru: 'Обновлено' })}: {data?.date || '…'}
-            <RefreshCw size={13} />
-          </button>
-        </div>
-        <button onClick={() => go('rates')} className="tap w-full grid grid-cols-3 gap-2 text-left">
-          {top.map((r, i) => (
-            <div key={i} className="rounded-2xl bg-[#0b2a6b]/35 border border-white/10 px-2.5 py-2.5 flex gap-2">
-              <span className="text-2xl leading-none">{r ? FLAGS[r.code] ?? '' : ''}</span>
-              <div className="min-w-0">
-                <div className="text-xs text-white/85">{r?.code ?? '—'}</div>
-                <div className="font-display text-lg font-bold leading-tight">{r ? fmt(r.rate) : '··,··'}</div>
-                {r?.change != null && (
-                  <div className={`text-[11px] font-semibold ${r.change < 0 ? 'text-down' : 'text-up'}`}>
-                    {r.change < 0 ? '▼' : '▲'} {r.change < 0 ? '−' : '+'}
-                    {fmt(Math.abs(r.change))}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </button>
-      </div>
-
+    ),
+    banners: <Banners go={go} />,
+    quick: (available('cards') || available('topup')) && (
       <div className="grid grid-cols-2 gap-3 mb-6">
-        <button
-          onClick={() => go('cards')}
-          className="tap rise text-left rounded-3xl p-3 flex items-center gap-2.5 text-white bg-[linear-gradient(135deg,#1d6fe8,#3d9bff)] shadow-[0_16px_32px_-18px_rgba(47,140,255,0.9)]"
-        >
-          <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/20 grid place-items-center">
-            <CreditCard size={22} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="font-display text-sm font-bold leading-tight">{t({ uk: 'Відкрити карту', ru: 'Открыть карту' })}</div>
-            <div className="text-[11px] opacity-90 mt-0.5 truncate">Kraken · Simple · Kolo</div>
-          </div>
-          <ChevronRight size={18} className="shrink-0 opacity-80" />
-        </button>
-        <button
-          onClick={() => go('topup')}
-          className="tap rise text-left rounded-3xl p-3 flex items-center gap-2.5 text-ink bg-[linear-gradient(135deg,#ffc21a,#ffe066)] shadow-[0_16px_32px_-18px_rgba(255,210,63,0.9)]"
-        >
-          <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/35 grid place-items-center">
-            <Smartphone size={22} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="font-display text-sm font-bold leading-tight">{t({ uk: 'Поповнити мобільний', ru: 'Пополнить мобильный' })}</div>
-            <div className="text-[11px] font-semibold opacity-75 mt-0.5 truncate">Kyivstar · Vodafone · lifecell</div>
-          </div>
-          <ChevronRight size={18} className="shrink-0 opacity-70" />
-        </button>
+        {available('cards') && (
+          <button
+            onClick={() => go('cards')}
+            className="tap rise text-left rounded-3xl p-3 flex items-center gap-2.5 text-white bg-[linear-gradient(135deg,#1d6fe8,#3d9bff)] shadow-[0_16px_32px_-18px_rgba(47,140,255,0.9)]"
+          >
+            <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/20 grid place-items-center">
+              <CreditCard size={22} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-display text-sm font-bold leading-tight">{t({ uk: 'Відкрити карту', ru: 'Открыть карту' })}</div>
+              <div className="text-[11px] opacity-90 mt-0.5 truncate">Kraken · Simple · Kolo</div>
+            </div>
+            <ChevronRight size={18} className="shrink-0 opacity-80" />
+          </button>
+        )}
+        {available('topup') && (
+          <button
+            onClick={() => go('topup')}
+            className="tap rise text-left rounded-3xl p-3 flex items-center gap-2.5 text-ink bg-[linear-gradient(135deg,#ffc21a,#ffe066)] shadow-[0_16px_32px_-18px_rgba(255,210,63,0.9)]"
+          >
+            <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/35 grid place-items-center">
+              <Smartphone size={22} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-display text-sm font-bold leading-tight">{t({ uk: 'Поповнити мобільний', ru: 'Пополнить мобильный' })}</div>
+              <div className="text-[11px] font-semibold opacity-75 mt-0.5 truncate">Kyivstar · Vodafone · lifecell</div>
+            </div>
+            <ChevronRight size={18} className="shrink-0 opacity-70" />
+          </button>
+        )}
       </div>
-
-      <Nearby go={go} />
-
+    ),
+    categories: available('map') && config.home.categories.length > 0 && (
+      <section className="mb-5 rise">
+        <h2 className="font-display text-lg font-bold mb-3">{t({ uk: 'Популярні категорії', ru: 'Популярные категории' })}</h2>
+        <div className="no-scrollbar -mx-4 px-4 flex gap-2 overflow-x-auto">
+          {categoryOrder(config.home.categories).map((c) => (
+            <button
+              key={c.id}
+              onClick={() => openMap(c.id)}
+              className="tap shrink-0 flex items-center gap-2 rounded-2xl border border-line bg-panel/70 px-3.5 py-2 text-sm font-semibold"
+            >
+              <span className="text-lg leading-none">{c.emoji}</span>
+              {t(c.label)}
+            </button>
+          ))}
+        </div>
+      </section>
+    ),
+    nearby: <Nearby go={go} available={available} />,
+    links: (
       <div className="grid grid-cols-2 gap-3 mb-5">
         <button
           onClick={() => {
             haptic()
             openLink(FLIXBUS_URL)
           }}
-          className="tap rise text-left rounded-3xl p-3 flex items-center gap-2.5 text-white bg-[linear-gradient(135deg,#3fae0a,#73d700)]"
+          className={`tap rise text-left rounded-3xl p-3 flex items-center gap-2.5 text-white bg-[linear-gradient(135deg,#3fae0a,#73d700)] ${
+            available('telegram') ? '' : 'col-span-2'
+          }`}
         >
           <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/20 grid place-items-center">
             <Bus size={22} />
@@ -150,23 +118,26 @@ export default function Home({ go }: { go: Go }) {
           </div>
           <ChevronRight size={18} className="shrink-0 opacity-80" />
         </button>
-        <button
-          onClick={() => go('telegram')}
-          className="tap rise text-left rounded-3xl p-3 flex items-center gap-2.5 text-white bg-[linear-gradient(135deg,#1d8fd6,#33aef0)]"
-        >
-          <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/20 grid place-items-center">
-            <Send size={20} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="font-display text-sm font-bold">Telegram</div>
-            <div className="text-[11px] opacity-90 mt-0.5 leading-tight">
-              {t({ uk: 'Групи та канали', ru: 'Группы и каналы' })}
+        {available('telegram') && (
+          <button
+            onClick={() => go('telegram')}
+            className="tap rise text-left rounded-3xl p-3 flex items-center gap-2.5 text-white bg-[linear-gradient(135deg,#1d8fd6,#33aef0)]"
+          >
+            <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/20 grid place-items-center">
+              <Send size={20} />
             </div>
-          </div>
-          <ChevronRight size={18} className="shrink-0 opacity-80" />
-        </button>
+            <div className="flex-1 min-w-0">
+              <div className="font-display text-sm font-bold">Telegram</div>
+              <div className="text-[11px] opacity-90 mt-0.5 leading-tight">
+                {t({ uk: 'Групи та канали', ru: 'Группы и каналы' })}
+              </div>
+            </div>
+            <ChevronRight size={18} className="shrink-0 opacity-80" />
+          </button>
+        )}
       </div>
-
+    ),
+    tiles: tiles.length > 0 && (
       <div className="grid grid-cols-2 gap-3 mb-5">
         {tiles.map((s, i) => (
           <button
@@ -185,29 +156,8 @@ export default function Home({ go }: { go: Go }) {
           </button>
         ))}
       </div>
-
-      <button
-        onClick={() => go('calendar')}
-        className="tap w-full text-left rounded-3xl p-4 border border-sun/30 bg-sun/10 flex items-center gap-4 rise"
-      >
-        <div className="rounded-2xl bg-sun text-ink px-3 py-2 text-center min-w-16">
-          <div className="font-display text-xl font-bold leading-none">{next.days}</div>
-          <div className="text-[10px] font-bold uppercase">
-            {t({ uk: 'днів', ru: 'дней' })}
-          </div>
-        </div>
-        <div>
-          <div className="text-xs text-sun font-semibold">
-            {t({ uk: 'Сьогодні', ru: 'Сегодня' })} {dayMonth(lang, today.getDate(), today.getMonth())} ·{' '}
-            {t({ uk: 'найближче свято', ru: 'ближайший праздник' })}
-          </div>
-          <div className="font-bold">{t(next.holiday.title)}</div>
-          <div className="text-xs text-mute">
-            {dayMonth(lang, next.date.getDate(), next.date.getMonth())}
-          </div>
-        </div>
-      </button>
-
+    ),
+    info: available('info') && (
       <button
         onClick={() => go('info')}
         className="tap w-full mt-3 flex items-center gap-3 rounded-2xl bg-panel border border-line px-4 py-3.5 text-left rise"
@@ -221,6 +171,84 @@ export default function Home({ go }: { go: Go }) {
         </span>
         <ChevronRight size={18} className="text-mute" />
       </button>
+    ),
+  }
+
+  return (
+    <div>
+      <header className="flex items-start justify-between mb-5 rise">
+        <div className="min-w-0">
+          {config.display.showGreeting && (
+            <p className="text-base text-white/80">{name
+                ? `${t({ uk: 'Привіт', ru: 'Привет' })}, ${name} 👋`
+                : t({ uk: 'Вітаємо 👋', ru: 'Добро пожаловать 👋' })}</p>
+          )}
+          {config.logoUrl ? (
+            <img src={config.logoUrl} alt={config.appName} className="h-12 max-w-[14rem] object-contain object-left mt-1" />
+          ) : (
+            <h1 className="font-display text-4xl font-bold tracking-tight">
+              {rest.length ? (
+                <>
+                  {brand} <span className="text-sun">{rest.join(' ')}</span>
+                </>
+              ) : (
+                brand
+              )}
+            </h1>
+          )}
+        </div>
+        {config.display.showLangSwitch && (
+          <button
+            onClick={() => {
+              haptic()
+              setLang(nextLang)
+            }}
+            aria-label="Language"
+            className="tap mt-1 flex items-center gap-1 rounded-2xl px-3.5 py-2 font-display font-bold bg-sky text-white shadow-[inset_0_-6px_0_var(--color-sun)]"
+          >
+            {lang === 'uk' ? 'UA' : 'RU'}
+            <ChevronDown size={16} strokeWidth={3} />
+          </button>
+        )}
+      </header>
+
+      {config.home.sections.filter((s) => s.enabled).map((s) => (
+        <Fragment key={s.id}>{sections[s.id]}</Fragment>
+      ))}
+    </div>
+  )
+}
+
+// Admin-managed promo banners; a banner opens its https link or an app section (`screen:<id>`).
+function Banners({ go }: { go: Go }) {
+  const { home } = useAppConfig()
+  const banners = home.banners.filter((b) => b.enabled)
+  if (!banners.length) return null
+  const open = (link: string) => {
+    if (!link) return
+    haptic()
+    if (link.startsWith('screen:')) go(link.slice(7) as Screen)
+    else openLink(link)
+  }
+  return (
+    <div className="no-scrollbar -mx-4 px-4 flex gap-3 overflow-x-auto snap-x snap-mandatory mb-5 rise">
+      {banners.map((b) => (
+        <button
+          key={b.id}
+          onClick={() => open(b.link)}
+          className={`tap relative shrink-0 snap-start overflow-hidden rounded-3xl border border-line bg-panel text-left ${
+            banners.length > 1 ? 'w-[85%]' : 'w-full'
+          } ${b.imageUrl ? 'h-36' : 'p-4'}`}
+        >
+          {b.imageUrl && <img src={b.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />}
+          {(b.title || b.text) && (
+            <div className={b.imageUrl ? 'absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-ink/90 to-transparent' : ''}>
+              {b.title && <div className="font-display font-bold leading-tight">{b.title}</div>}
+              {b.text && <div className="text-xs text-white/80 mt-0.5 line-clamp-2">{b.text}</div>}
+            </div>
+          )}
+        </button>
+      ))}
     </div>
   )
 }
@@ -246,7 +274,7 @@ interface Item {
 const NEW_MS = 3 * 24 * 3600_000
 
 // "Знайти поруч": a preview of the latest ads and catalog cards, filtered by chip.
-function Nearby({ go }: { go: Go }) {
+function Nearby({ go, available }: { go: Go; available: (s: Screen) => boolean }) {
   const { t } = useI18n()
   const [chip, setChip] = useState<Chip>('goods')
   const [ads, setAds] = useState<AdView[] | null>(null)
@@ -288,6 +316,7 @@ function Nearby({ go }: { go: Go }) {
   }, [chip, ads, places, t])
 
   const shown = items?.slice(0, 4)
+  if (!available('ads') && !available('map')) return null
 
   return (
     <section className="mb-5 rise">

@@ -1,18 +1,27 @@
-import { ChevronLeft, Send } from 'lucide-react'
+import { ChevronLeft, Mail, Phone, Send } from 'lucide-react'
 import { Fragment, useState } from 'react'
-import { INFO, SUPPORT_HANDLE, SUPPORT_URL, type InfoBlock, type InfoId } from '../../data/info'
+import { INFO, type InfoBlock, type InfoId } from '../../data/info'
+import { useAppConfig } from '../../lib/appState'
 import { useI18n } from '../../lib/i18n'
 import type { Go } from '../../lib/nav'
 import { haptic, openLink } from '../../lib/telegram'
 import { Card, ScreenTitle } from '../ui'
 
-const openSupport = () => {
-  haptic('medium')
-  openLink(SUPPORT_URL)
+// Support contact comes from the admin settings (defaults to @UATmarket).
+function useSupport() {
+  const { contacts } = useAppConfig()
+  return {
+    ...contacts,
+    open: () => {
+      haptic('medium')
+      openLink(contacts.supportUrl)
+    },
+  }
 }
 
-// Paragraph text with `{support}` replaced by a tappable @UATmarket link.
+// Paragraph text with `{support}` replaced by a tappable support link.
 function Rich({ text }: { text: string }) {
+  const support = useSupport()
   const parts = text.split('{support}')
   return (
     <>
@@ -20,8 +29,8 @@ function Rich({ text }: { text: string }) {
         <Fragment key={i}>
           {p}
           {i < parts.length - 1 && (
-            <button onClick={openSupport} className="tap font-semibold text-sky underline-offset-2 hover:underline">
-              {SUPPORT_HANDLE}
+            <button onClick={support.open} className="tap font-semibold text-sky underline-offset-2 hover:underline">
+              {support.supportHandle}
             </button>
           )}
         </Fragment>
@@ -63,6 +72,7 @@ function Block({ b }: { b: InfoBlock }) {
 
 export default function InfoScreen({ go }: { go: Go }) {
   const { t } = useI18n()
+  const support = useSupport()
   const [tab, setTab] = useState<InfoId>('about')
   const section = INFO.find((s) => s.id === tab)!
 
@@ -112,7 +122,7 @@ export default function InfoScreen({ go }: { go: Go }) {
       </Card>
 
       <button
-        onClick={openSupport}
+        onClick={support.open}
         className="tap w-full mt-4 rounded-3xl p-4 flex items-center gap-4 bg-[#229ed9] text-white text-left"
       >
         <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/15 grid place-items-center">
@@ -120,9 +130,23 @@ export default function InfoScreen({ go }: { go: Go }) {
         </div>
         <div className="flex-1">
           <div className="font-display font-bold">{t({ uk: 'Написати в підтримку', ru: 'Написать в поддержку' })}</div>
-          <div className="text-xs font-semibold opacity-80 mt-0.5">{SUPPORT_HANDLE}</div>
+          <div className="text-xs font-semibold opacity-80 mt-0.5">{support.supportHandle}</div>
         </div>
       </button>
+      {(support.email || support.phone) && (
+        <Card className="mt-3 space-y-2 text-sm">
+          {support.email && (
+            <a href={`mailto:${support.email}`} className="flex items-center gap-2 font-semibold">
+              <Mail size={16} className="text-sky" /> {support.email}
+            </a>
+          )}
+          {support.phone && (
+            <a href={`tel:${support.phone.replace(/[^\d+]/g, '')}`} className="flex items-center gap-2 font-semibold">
+              <Phone size={16} className="text-sky" /> {support.phone}
+            </a>
+          )}
+        </Card>
+      )}
     </div>
   )
 }

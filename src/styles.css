@@ -10,6 +10,11 @@
   --color-sun: #ffd23f;
   --color-up: #3ddc97;
   --color-down: #ff6b6b;
+  /* Admin panel accent — keeps the panel visibly apart from the user-facing app. */
+  --color-adm: #b18cff;
+  --color-adm-ink: #120d1f;
+  --color-adm-panel: #1b1530;
+  --color-adm-line: #34295a;
   --font-display: "Unbounded", "Manrope", system-ui, sans-serif;
   --font-sans: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
 }

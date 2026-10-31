@@ -1,8 +1,10 @@
-import { boolean, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 
 // One row per mobile top-up paid through Telegram Payments.
 // status: pending → paid (money received) → fulfilled | failed (aggregator result).
-export const topupOrders = pgTable('topup_orders', {
+export const topupOrders = pgTable(
+  'topup_orders',
+  {
   id: uuid().primaryKey().defaultRandom(),
   telegramUserId: text('telegram_user_id').notNull(),
   operator: text().notNull(),
@@ -15,7 +17,10 @@ export const topupOrders = pgTable('topup_orders', {
   error: text(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-})
+  },
+  // A Telegram charge can only ever be credited to one order.
+  (t) => [uniqueIndex('topup_orders_tg_charge_idx').on(t.telegramChargeId)],
+)
 
 // Classified ads posted from the Mini App and mirrored to the Telegram channel.
 // status: active | deleted. Photo bytes live in the `ad-photos` blob store keyed by id.
@@ -33,6 +38,8 @@ export const ads = pgTable(
     channelChatId: text('channel_chat_id'),
     channelMessageId: integer('channel_message_id'),
     status: text().notNull().default('active'),
+    // Admin review: pending | approved | rejected (rejected ads also get status 'rejected').
+    moderation: text().notNull().default('pending'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -82,6 +89,7 @@ export const places = pgTable(
     channelChatId: text('channel_chat_id'),
     channelMessageIds: integer('channel_message_ids').array().notNull().default([]),
     status: text().notNull().default('active'),
+    moderation: text().notNull().default('pending'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -91,3 +99,108 @@ export const places = pgTable(
     index('places_user_idx').on(t.telegramUserId),
   ],
 )
+
+// Everyone who opened the Mini App with valid initData (upserted on each open). Blocked users can
+// still browse but can't publish ads/cards or file reports.
+export const users = pgTable(
+  'users',
+  {
+    telegramUserId: text('telegram_user_id').primaryKey(),
+    username: text().notNull().default(''),
+    firstName: text('first_name').notNull().default(''),
+    lastName: text('last_name').notNull().default(''),
+    languageCode: text('language_code').notNull().default(''),
+    blocked: boolean().notNull().default(false),
+    blockedReason: text('blocked_reason').notNull().default(''),
+    sessions: integer().notNull().default(0),
+    firstSeenAt: timestamp('first_seen_at').defaultNow().notNull(),
+    lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
+  },
+  (t) => [index('users_first_seen_idx').on(t.firstSeenAt), index('users_last_seen_idx').on(t.lastSeenAt)],
+)
+
+// App activity (one "open" row per Mini App launch) for the admin dashboard.
+export const appEvents = pgTable(
+  'app_events',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    telegramUserId: text('telegram_user_id').notNull(),
+    type: text().notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => [index('app_events_created_idx').on(t.createdAt), index('app_events_user_idx').on(t.telegramUserId)],
+)
+
+// User complaints about an ad or a catalog card. status: open | resolved | dismissed.
+export const reports = pgTable(
+  'reports',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    telegramUserId: text('telegram_user_id').notNull(),
+    targetKind: text('target_kind').notNull(),
+    targetId: uuid('target_id').notNull(),
+    reason: text().notNull(),
+    status: text().notNull().default('open'),
+    resolvedAt: timestamp('resolved_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex('reports_user_target_idx').on(t.telegramUserId, t.targetKind, t.targetId),
+    index('reports_status_idx').on(t.status, t.createdAt),
+  ],
+)
+
+// Audit trail of everything done from the admin panel (logins included).
+export const adminLog = pgTable(
+  'admin_log',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    adminId: text('admin_id').notNull(),
+    action: text().notNull(),
+    targetKind: text('target_kind').notNull().default(''),
+    targetId: text('target_id').notNull().default(''),
+    details: jsonb().notNull().default({}),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => [index('admin_log_created_idx').on(t.createdAt), index('admin_log_target_idx').on(t.targetKind, t.targetId)],
+)
+
+// Admin-editable app configuration (key "config" holds the AppConfig JSON from src/lib/appConfig.ts).
+export const appSettings = pgTable('app_settings', {
+  key: text().primaryKey(),
+  value: jsonb().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+
+// Information materials managed by the admin, shown on the "Документи" screen.
+export const documents = pgTable(
+  'documents',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    title: text().notNull(),
+    body: text().notNull().default(''),
+    url: text().notNull().default(''),
+    published: boolean().notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => [index('documents_order_idx').on(t.sortOrder)],
+)
+
+// Bot broadcasts. Sent in small batches (cursor = last processed telegram_user_id) so a long
+// mailing never hits the function timeout. status: draft | sending | done.
+export const broadcasts = pgTable('broadcasts', {
+  id: uuid().primaryKey().defaultRandom(),
+  text: text().notNull(),
+  buttonText: text('button_text').notNull().default(''),
+  buttonUrl: text('button_url').notNull().default(''),
+  status: text().notNull().default('draft'),
+  total: integer().notNull().default(0),
+  sent: integer().notNull().default(0),
+  failed: integer().notNull().default(0),
+  cursor: text().notNull().default(''),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  finishedAt: timestamp('finished_at'),
+})

@@ -1,23 +1,23 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { botApi, botToken, webhookSecret } from '../../../server/telegramBot'
+import { botToken, safeEqual, webhookSecret } from '../../../server/telegramBot'
+import { setupWebhook } from '../../../server/webhookSetup'
 
-// One-time setup: open /api/telegram/setup?key=<TELEGRAM_WEBHOOK_SECRET> after deploy
-// to point the bot's webhook at this site.
+// Points the bot's webhook at this site. The easiest way is the button in the admin panel
+// (Налаштування → Telegram webhook). From a terminal:
+//   curl -X POST -H "Authorization: Bearer <TELEGRAM_WEBHOOK_SECRET>" https://<site>/api/telegram/setup
+// The secret travels in a header only — URLs end up in logs and browser history.
 export const Route = createFileRoute('/api/telegram/setup')({
   server: {
     handlers: {
-      GET: async ({ request }) => {
-        const url = new URL(request.url)
+      GET: async () => new Response('Use POST with an Authorization header, or the admin panel.', { status: 405 }),
+      POST: async ({ request }) => {
         const secret = webhookSecret()
         if (!botToken() || !secret) return new Response('TELEGRAM_BOT_TOKEN / TELEGRAM_WEBHOOK_SECRET not set', { status: 500 })
-        if (url.searchParams.get('key') !== secret) return new Response('Forbidden', { status: 403 })
+        const auth = request.headers.get('authorization') ?? ''
+        if (!safeEqual(auth, `Bearer ${secret}`)) return new Response('Forbidden', { status: 403 })
         try {
-          await botApi('setWebhook', {
-            url: `${url.origin}/api/telegram/webhook`,
-            secret_token: secret,
-            allowed_updates: ['message', 'pre_checkout_query'],
-          })
-          return new Response(`Webhook set to ${url.origin}/api/telegram/webhook`)
+          const url = await setupWebhook(new URL(request.url).origin)
+          return new Response(`Webhook set to ${url}`)
         } catch (e) {
           return new Response(e instanceof Error ? e.message : String(e), { status: 502 })
         }
