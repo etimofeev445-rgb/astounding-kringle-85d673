@@ -18,6 +18,7 @@ import NewsScreen from '../components/screens/NewsScreen'
 import InfoScreen from '../components/screens/InfoScreen'
 import MapScreen from '../components/screens/MapScreen'
 import StoreScreen from '../components/screens/StoreScreen'
+import SupportScreen from '../components/screens/SupportScreen'
 import SearchScreen, { type OpenTarget } from '../components/screens/SearchScreen'
 import type { Screen } from '../lib/nav'
 import { LANGS, LangProvider, useI18n, type Tr } from '../lib/i18n'
@@ -125,6 +126,7 @@ function Shell() {
     const key = start.startsWith('store_') ? normalizeStoreKey(start.slice(6)) : ''
     if (key) setTarget({ screen: 'store', store: key })
     else if (start === 'map') setTarget({ screen: 'map' })
+    else if (start === 'support') setTarget({ screen: 'support' })
   }, [])
 
   // t.me/<bot>/<app>?startapp=admin opens the panel directly — for the admin only.
@@ -247,6 +249,7 @@ function Screens({
         />
       )}
       {screen === 'store' && target.store && <StoreScreen storeKey={target.store} />}
+      {screen === 'support' && <SupportScreen />}
     </>
   )
 }

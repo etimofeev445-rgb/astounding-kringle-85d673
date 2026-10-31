@@ -261,3 +261,39 @@ export const automationEvents = pgTable(
   },
   (t) => [index('automation_events_created_idx').on(t.createdAt), index('automation_events_kind_idx').on(t.kind, t.createdAt)],
 )
+
+// Support conversations from the Mini App ("Підтримка"). The AI consultant answers while the ticket
+// is open; escalated tickets wait for the admin, whose replies also go to the user via the bot.
+// status: open | escalated | closed. At most one unclosed ticket per user.
+export const supportTickets = pgTable(
+  'support_tickets',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    telegramUserId: text('telegram_user_id').notNull(),
+    status: text().notNull().default('open'),
+    escalatedReason: text('escalated_reason').notNull().default(''),
+    aiReplies: integer('ai_replies').notNull().default(0),
+    unread: boolean().notNull().default(false),
+    escalatedAt: timestamp('escalated_at'),
+    closedAt: timestamp('closed_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex('support_tickets_user_open_idx').on(t.telegramUserId).where(sql`status <> 'closed'`),
+    index('support_tickets_status_idx').on(t.status, t.updatedAt),
+  ],
+)
+
+// Messages of a support ticket. role: user | ai | admin | system.
+export const supportMessages = pgTable(
+  'support_messages',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    ticketId: uuid('ticket_id').notNull(),
+    role: text().notNull(),
+    text: text().notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => [index('support_messages_ticket_idx').on(t.ticketId, t.createdAt)],
+)

@@ -1,6 +1,6 @@
 import type { Tr } from './i18n'
 
-export type Screen = 'home' | 'search' | 'rates' | 'banks' | 'docs' | 'calc' | 'calendar' | 'cards' | 'np' | 'telegram' | 'topup' | 'menu' | 'ads' | 'cart' | 'news' | 'info' | 'map' | 'store'
+export type Screen = 'home' | 'search' | 'rates' | 'banks' | 'docs' | 'calc' | 'calendar' | 'cards' | 'np' | 'telegram' | 'topup' | 'menu' | 'ads' | 'cart' | 'news' | 'info' | 'map' | 'store' | 'support'
 
 export type Go = (s: Screen) => void
 

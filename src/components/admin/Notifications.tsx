@@ -1,21 +1,30 @@
-import { Send, Square } from 'lucide-react'
+import { CalendarClock, Eye, Send, Square } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { BROADCAST_AUDIENCES, type BroadcastAudience } from '../../lib/automation'
 import { confirmAction, notify, showAlert } from '../../lib/telegram'
 import type { AdminResult } from '../../server/admin/actions'
 import { adminCall, useAdminQuery } from './api'
 import { Badge, Btn, Empty, ErrorBox, Field, Loading, Panel, Title, aInput, dt, useAction } from './ui'
 
 type Broadcast = AdminResult<'broadcasts.list'>['items'][number]
+type Preview = AdminResult<'broadcasts.preview'>
+
+const audienceLabel = (a: string) => BROADCAST_AUDIENCES.find((x) => x.value === a)?.label ?? a
 
 export default function Notifications() {
   const list = useAdminQuery('broadcasts.list')
   const [text, setText] = useState('')
   const [buttonText, setButtonText] = useState('')
   const [buttonUrl, setButtonUrl] = useState('')
+  const [audience, setAudience] = useState<BroadcastAudience>('all')
+  const [when, setWhen] = useState('')
+  const [preview, setPreview] = useState<Preview | null>(null)
   const [active, setActive] = useState<Broadcast | null>(null)
   const { busy, run } = useAction()
   const stop = useRef(false)
-  const msg = { text, buttonText, buttonUrl }
+  const msg = { text, buttonText, buttonUrl, audience }
+  // Any edit invalidates the reviewed preview: the admin must review again before confirming.
+  useEffect(() => setPreview(null), [text, buttonText, buttonUrl, audience, when])
 
   // Pulls batches until the mailing is done (or stopped); honours Telegram's flood-wait.
   const pump = async (b: Broadcast) => {
@@ -41,18 +50,32 @@ export default function Notifications() {
 
   useEffect(() => () => void (stop.current = true), [])
 
+  const review = () => run('preview', async () => setPreview(await adminCall('broadcasts.preview', msg)))
+
+  // Second, explicit confirmation; the server re-checks that the recipient count is still the one shown.
   const start = async () => {
-    const audience = list.data?.audience ?? 0
+    if (!preview) return
+    const at = when ? new Date(when) : null
     const ok = await confirmAction(
-      `Надіслати повідомлення ${audience} користувачам? Скасувати вже надіслані повідомлення буде неможливо.`,
+      at
+        ? `Запланувати розсилку на ${at.toLocaleString('uk-UA')} для ${preview.recipients} користувачів (${audienceLabel(preview.audience)})?`
+        : `Надіслати повідомлення ${preview.recipients} користувачам (${audienceLabel(preview.audience)}) зараз? Скасувати вже надіслані повідомлення буде неможливо.`,
     )
     if (!ok) return
-    const b = await run('create', () => adminCall('broadcasts.create', { ...msg, confirm: true }))
+    const b = await run('create', () =>
+      adminCall('broadcasts.create', { ...msg, confirm: true, recipients: preview.recipients, scheduledAt: at ? at.toISOString() : null }),
+    )
     if (b) {
       setText('')
       setButtonText('')
       setButtonUrl('')
-      pump(b)
+      setWhen('')
+      setPreview(null)
+      if (b.status === 'sending') pump(b)
+      else {
+        showAlert('Розсилку заплановано. Її надішле модуль «Керування розсилками» (Автоматизація) — переконайтеся, що він увімкнений.')
+        list.reload()
+      }
     }
   }
 
@@ -61,8 +84,8 @@ export default function Notifications() {
       <Panel className="space-y-3">
         <Title>Нова розсилка</Title>
         <p className="text-xs text-mute">
-          Надсилається від імені бота всім незаблокованим користувачам ({list.data?.audience ?? '…'}). Повідомлення отримають лише ті, хто
-          хоч раз запускав бота; решта рахується як «не доставлено».
+          Надсилається від імені бота незаблокованим користувачам вибраної аудиторії (усього користувачів: {list.data?.audience ?? '…'}).
+          Повідомлення отримають лише ті, хто хоч раз запускав бота; решта рахується як «не доставлено». Порядок: перегляд → підтвердження.
         </p>
         <Field label="Текст">
           <textarea rows={5} maxLength={4000} value={text} onChange={(e) => setText(e.target.value)} className={aInput} />
@@ -73,6 +96,21 @@ export default function Notifications() {
           </Field>
           <Field label="Посилання кнопки">
             <input value={buttonUrl} onChange={(e) => setButtonUrl(e.target.value)} placeholder="https://" className={aInput} />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Аудиторія">
+            <select value={audience} onChange={(e) => setAudience(e.target.value as BroadcastAudience)} className={aInput}>
+              {BROADCAST_AUDIENCES.map((a) => (
+                <option key={a.value} value={a.value}>
+                  {a.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Час (порожньо — одразу)">
+            <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} className={aInput} />
           </Field>
         </div>
 
@@ -97,10 +135,22 @@ export default function Notifications() {
           >
             Тест собі
           </Btn>
-          <Btn tone="primary" className="flex-[2]" disabled={!text.trim() || !!active} busy={busy === 'create'} onClick={start}>
-            <Send size={15} /> Надіслати всім
+          <Btn className="flex-[2]" disabled={!text.trim() || !!active} busy={busy === 'preview'} onClick={review}>
+            <Eye size={15} /> Переглянути
           </Btn>
         </div>
+
+        {preview && (
+          <div className="rounded-xl border border-adm/40 bg-adm/10 p-3 space-y-2">
+            <div className="text-sm">
+              Одержувачів зараз: <b className="tabular-nums">{preview.recipients}</b> · {audienceLabel(preview.audience)}
+              {when && <> · {new Date(when).toLocaleString('uk-UA')}</>}
+            </div>
+            <Btn tone="primary" className="w-full" disabled={!preview.recipients || !!active} busy={busy === 'create'} onClick={start}>
+              {when ? <CalendarClock size={15} /> : <Send size={15} />} {when ? 'Підтвердити й запланувати' : `Підтвердити й надіслати (${preview.recipients})`}
+            </Btn>
+          </div>
+        )}
       </Panel>
 
       {active && (
@@ -130,9 +180,27 @@ export default function Notifications() {
                 <div className="flex items-center gap-2 mb-1">
                   <Badge status={b.status} />
                   <span className="text-[11px] text-mute">{dt(b.createdAt)}</span>
+                  <span className="text-[11px] text-mute">· {audienceLabel(b.audience)}</span>
+                  {b.scheduledAt && b.status === 'scheduled' && <span className="text-[11px] text-sun">· на {dt(b.scheduledAt)}</span>}
                 </div>
                 <p className="text-sm whitespace-pre-line line-clamp-3">{b.text}</p>
                 <Progress b={b} />
+                {b.status === 'scheduled' && (
+                  <div className="flex gap-2 mt-2">
+                    <Btn
+                      small
+                      tone="danger"
+                      onClick={() =>
+                        run('stop', async () => {
+                          await adminCall('broadcasts.stop', { id: b.id })
+                          list.reload()
+                        }, { confirm: 'Скасувати заплановану розсилку?' })
+                      }
+                    >
+                      Скасувати
+                    </Btn>
+                  </div>
+                )}
                 {b.status === 'sending' && !active && (
                   <div className="flex gap-2 mt-2">
                     <Btn small tone="primary" onClick={() => pump(b)}>

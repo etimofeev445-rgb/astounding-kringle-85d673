@@ -109,6 +109,7 @@ export async function listLog(_: Admin, p: unknown) {
     settings: ['settings.', 'asset.', 'document.', 'webhook.'],
     broadcasts: ['broadcast.'],
     orders: ['order.'],
+    automation: ['automation.', 'support.'],
   }
   const conds = (prefixes[group] ?? []).map((pre) => sqlLike(adminLog.action, `${pre}%`))
   const where = conds.length ? sql.join(conds, sql` or `) : undefined

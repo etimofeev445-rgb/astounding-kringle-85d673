@@ -12,6 +12,7 @@ export const MODULE_IDS = [
   'webhook',
   'jobs',
   'analytics',
+  'support',
 ] as const
 export type ModuleId = (typeof MODULE_IDS)[number]
 export const isModuleId = (v: unknown): v is ModuleId => typeof v === 'string' && (MODULE_IDS as readonly string[]).includes(v)
@@ -90,6 +91,20 @@ export const DEFAULT_STOP_WORDS = [
   'закладки',
   'наркотики',
   'інтим',
+]
+export const DEFAULT_ESCALATE_WORDS = [
+  'повернення',
+  'повернути гроші',
+  'списали',
+  'не зарахувало',
+  'шахрай',
+  'обман',
+  'юрист',
+  'поліція',
+  'адміністратор',
+  'оператор',
+  'возврат',
+  'деньги',
 ]
 export const DEFAULT_ALLOWED_DOMAINS = [
   't.me',
@@ -260,7 +275,7 @@ export const MODULES: ModuleDef[] = [
     title: 'Контроль фонових задач',
     emoji: '⚙️',
     description:
-      'Повертає завислі задачі в чергу (до ліміту спроб), попереджає про розсилки, що не стартували, та оплачені поповнення без зарахування. Замовлення не змінює.',
+      'Попереджає про розсилки, що не стартували вчасно, і оплачені поповнення без зарахування. Завислі задачі повертаються в чергу (до ліміту спроб) завжди — ці ліміти діють і коли модуль вимкнено. Замовлення не змінює, історію не видаляє.',
     lockGroup: 'jobs',
     manual: true,
     schedule: every(15),
@@ -269,7 +284,6 @@ export const MODULES: ModuleDef[] = [
       { key: 'maxAttempts', label: 'Макс. спроб', type: 'number', default: 3, min: 1, max: 10 },
       { key: 'lateMinutes', label: 'Розсилка запізнюється на, хв', type: 'number', default: 15, min: 5, max: 1440 },
       { key: 'orderMinutes', label: 'Поповнення без зарахування, хв', type: 'number', default: 30, min: 5, max: 1440 },
-      { key: 'keepDays', label: 'Зберігати історію, днів', type: 'number', default: 30, min: 7, max: 365 },
     ],
   },
   {
@@ -281,6 +295,36 @@ export const MODULES: ModuleDef[] = [
     manual: true,
     schedule: daily('06:00'),
     fields: [{ key: 'topN', label: 'Розмір топів', type: 'number', default: 5, min: 3, max: 20 }],
+  },
+  {
+    id: 'support',
+    title: 'AI-консультант підтримки',
+    emoji: '💬',
+    description:
+      'Відповідає на звернення в розділі «Підтримка» застосунку. Складні звернення (гроші, скарги, прохання людини, невпевнена відповідь) передає адміністратору і сповіщає його в Telegram. Коли вимкнено — усі звернення одразу йдуть адміністратору.',
+    lockGroup: 'support',
+    manual: false,
+    schedule: null,
+    fields: [
+      {
+        key: 'escalateWords',
+        label: 'Слова для передачі адміністратору',
+        type: 'list',
+        default: DEFAULT_ESCALATE_WORDS,
+        hint: 'Через кому. Звернення з ними одразу йде адміністратору',
+      },
+      { key: 'maxAiReplies', label: 'Відповідей AI на звернення до передачі', type: 'number', default: 6, min: 1, max: 30 },
+      { key: 'perHour', label: 'Повідомлень від користувача за годину', type: 'number', default: 20, min: 3, max: 200 },
+      { key: 'notifyAdmin', label: 'Сповіщати адміністратора в Telegram', type: 'bool', default: true },
+      {
+        key: 'extraInfo',
+        label: 'Додаткова інформація для консультанта',
+        type: 'text',
+        default: '',
+        max: 2000,
+        hint: 'Графік роботи, правила, відповіді на часті питання — консультант спиратиметься на це',
+      },
+    ],
   },
 ]
 
@@ -471,3 +515,7 @@ export const BROADCAST_AUDIENCES = [
 ] as const
 export type BroadcastAudience = (typeof BROADCAST_AUDIENCES)[number]['value']
 export const isAudience = (v: unknown): v is BroadcastAudience => BROADCAST_AUDIENCES.some((a) => a.value === v)
+
+// reports.telegram_user_id of complaints filed by the "adcheck" module (not a real Telegram user).
+export const AUTO_REPORTER = 'automation'
+export const AUTO_REASON_PREFIX = '🤖 Автоперевірка: '
