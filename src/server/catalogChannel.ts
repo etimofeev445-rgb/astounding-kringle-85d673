@@ -111,7 +111,7 @@ export async function publish(p: Place, fresh: NewImages = {}): Promise<ChannelP
 }
 
 // Removes the post; Telegram refuses to delete messages older than 48h, so those get marked as withdrawn.
-export async function withdraw(p: Place) {
+export async function withdraw(p: Place, note = 'Картку видалено автором.') {
   if (!p.channelChatId || p.channelMessageIds.length === 0 || !botToken()) return
   try {
     await botApi('deleteMessages', { chat_id: p.channelChatId, message_ids: p.channelMessageIds })
@@ -120,7 +120,7 @@ export async function withdraw(p: Place) {
     await botApi(media ? 'editMessageCaption' : 'editMessageText', {
       chat_id: p.channelChatId,
       message_id: p.channelMessageIds[0],
-      [media ? 'caption' : 'text']: `❌ <s>${esc(p.title)}</s>\nКартку видалено автором.`,
+      [media ? 'caption' : 'text']: `❌ <s>${esc(p.title)}</s>\n${esc(note)}`,
       parse_mode: 'HTML',
     }).catch((e) => console.error('Withdraw post error:', e))
   }

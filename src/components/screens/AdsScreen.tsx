@@ -6,6 +6,7 @@ import { toJpeg } from '../../lib/image'
 import { useI18n, type Tr } from '../../lib/i18n'
 import { confirmAction, haptic, initData, notify, openLink, userHandle } from '../../lib/telegram'
 import { deleteAd, listAds, saveAd } from '../../server/ads'
+import { ReportButton } from '../ReportButton'
 import { CartToggle, Field, ScreenTitle, Segmented, inputCls } from '../ui'
 
 const CHANNEL_URL = 'https://t.me/UATmarket'
@@ -228,6 +229,7 @@ function AdCard({ ad, delay, onEdit, onDelete }: { ad: AdView; delay: number; on
           )}
         </div>
 
+        {!ad.mine && <ReportButton kind="ad" id={ad.id} />}
         {ad.mine && (
           <div className="flex gap-2 mt-2">
             <button onClick={onEdit} className="tap flex-1 flex items-center justify-center gap-2 rounded-2xl bg-line py-2.5 text-sm font-semibold">
@@ -323,7 +325,11 @@ function AdForm({
               ? { uk: `Максимум ${AD_LIMITS.perUser} активних оголошень`, ru: `Максимум ${AD_LIMITS.perUser} активных объявлений` }
               : res.reason === 'unauthorized'
                 ? { uk: 'Відкрийте застосунок у Telegram', ru: 'Откройте приложение в Telegram' }
-                : { uk: 'Перевірте поля форми', ru: 'Проверьте поля формы' },
+                : res.reason === 'blocked'
+                  ? { uk: 'Публікацію для вашого акаунта обмежено. Зверніться до підтримки', ru: 'Публикация для вашего аккаунта ограничена. Обратитесь в поддержку' }
+                  : res.reason === 'disabled'
+                    ? { uk: 'Подання оголошень тимчасово вимкнено', ru: 'Подача объявлений временно отключена' }
+                    : { uk: 'Перевірте поля форми', ru: 'Проверьте поля формы' },
           ),
         )
       }

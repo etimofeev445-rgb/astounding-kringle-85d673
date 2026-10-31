@@ -10,10 +10,15 @@ const PRESETS = [50, 100, 200, 500]
 const MIN = TOPUP_MIN
 const MAX = TOPUP_MAX
 
+// Accepts "+380 67…", "380 67…", "+38 067…", "8 067…", "067…" and "67…" (typed or pasted).
+// The input shows the 9 local digits, so values that are already local are kept as is.
 function toLocalDigits(raw: string) {
   let d = raw.replace(/\D/g, '')
-  if (d.startsWith('380')) d = d.slice(3)
-  else if (d.startsWith('0')) d = d.slice(1)
+  if (d.length > 9) {
+    if (d.startsWith('380')) d = d.slice(3)
+    else if (d.startsWith('80')) d = d.slice(2)
+  } else if (d.startsWith('380') && d.length > 3) d = d.slice(3)
+  d = d.replace(/^0+/, '')
   return d.slice(0, 9)
 }
 
@@ -47,7 +52,8 @@ export default function TopUp() {
   const amountOk = Number.isFinite(amount) && amount >= MIN && amount <= MAX
   const phoneOk = digits.length === 9
   const codeOk = !op || op.codes.includes(digits.slice(0, 2)) || digits.length < 2
-  const ready = !!op && phoneOk && amountOk
+  // The server rejects a code that doesn't belong to the chosen operator, so don't let it be submitted.
+  const ready = !!op && phoneOk && codeOk && amountOk
   const fullNumber = `+380${digits}`
   const payLabel = amountOk
     ? t({ uk: `Оплатити ${amount} ₴`, ru: `Оплатить ${amount} ₴` })

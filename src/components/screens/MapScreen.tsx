@@ -2,7 +2,7 @@ import { Instagram, MessageCircle, Phone, Plus, RotateCw, Search, Send, Store, X
 import { useEffect, useMemo, useState } from 'react'
 import { ADMIN_HANDLE, ADMIN_URL } from '../../lib/admin'
 import { useI18n } from '../../lib/i18n'
-import { CATEGORIES, category, placeLocation, placeSearchText, tgUsername, type PlaceCategory, type PlaceView } from '../../lib/places'
+import { CATEGORIES, category, isCategory, placeLocation, placeSearchText, tgUsername, type PlaceCategory, type PlaceView } from '../../lib/places'
 import { removePlace, upsertPlace, usePlaces } from '../../lib/placesData'
 import { confirmAction, haptic, initData, notify, openLink } from '../../lib/telegram'
 import { deletePlace } from '../../server/places'
@@ -95,10 +95,18 @@ function PlaceCard({ place, index, onOpen }: { place: PlaceView; index: number; 
   )
 }
 
-export default function MapScreen({ startAdd, openStore }: { startAdd?: boolean; openStore: (key: string) => void }) {
+export default function MapScreen({
+  startAdd,
+  initialCategory,
+  openStore,
+}: {
+  startAdd?: boolean
+  initialCategory?: string
+  openStore: (key: string) => void
+}) {
   const { t } = useI18n()
   const { places, error, reload } = usePlaces()
-  const [filter, setFilter] = useState<Filter>('all')
+  const [filter, setFilter] = useState<Filter>(initialCategory && isCategory(initialCategory) ? initialCategory : 'all')
   const [query, setQuery] = useState('')
   // The feed filters on a debounced copy of the query so typing stays smooth.
   const [search, setSearch] = useState('')

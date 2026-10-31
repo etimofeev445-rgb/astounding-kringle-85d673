@@ -1,5 +1,6 @@
 import { ShoppingCart } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { useAppConfig } from '../lib/appState'
 import { useCart, type CartItem } from '../lib/cart'
 import { useI18n } from '../lib/i18n'
 import { haptic } from '../lib/telegram'
@@ -72,7 +73,8 @@ export function fmt(n: number, digits = 2) {
 export function CartToggle({ item, className = '' }: { item: CartItem; className?: string }) {
   const { has, toggle, available } = useCart()
   const { t } = useI18n()
-  if (!available) return null
+  const { features } = useAppConfig()
+  if (!available || !features.cart) return null
   const saved = has(item.kind, item.ref)
   return (
     <button

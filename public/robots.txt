@@ -1,0 +1,4 @@
+# UAT Market is a Telegram Mini App; the public page may be indexed, the API may not.
+User-agent: *
+Allow: /
+Disallow: /api/

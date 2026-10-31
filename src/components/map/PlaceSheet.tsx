@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { useI18n } from '../../lib/i18n'
 import { category, placeLocation, tgUsername, type PlaceView } from '../../lib/places'
 import { haptic, openLink } from '../../lib/telegram'
+import { ReportButton } from '../ReportButton'
 
 // Slide-up sheet; swipe down (when scrolled to top), tap the backdrop or Esc to close.
 export function BottomSheet({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
@@ -211,6 +212,7 @@ export function PlaceDetails({
           <Store size={15} /> {t({ uk: 'Усі картки автора', ru: 'Все карточки автора' })}
         </button>
       )}
+      {!place.mine && <ReportButton kind="place" id={place.id} />}
       {place.mine && onEdit && onDelete && (
         <div className="flex gap-2 mt-2">
           <button onClick={onEdit} className="tap flex-1 flex items-center justify-center gap-2 rounded-2xl bg-line py-2.5 text-sm font-semibold">

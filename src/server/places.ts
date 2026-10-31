@@ -3,99 +3,29 @@ import { and, asc, count, desc, eq } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { ads, places } from '../../db/schema.js'
 import type { AdView } from '../lib/ads'
-import { normalizePhone } from '../lib/ads'
-import {
-  PLACE_LIMITS,
-  isCategory,
-  normalizeInstagram,
-  normalizeMapUrl,
-  normalizeStoreKey,
-  normalizeTg,
-  type PlaceInput,
-  type PlaceView,
-} from '../lib/places'
-import { adView, decodePhoto } from './ads'
-import { postUrl, publish, sync, withdraw, type NewImages } from './catalogChannel'
-import { deletePlacePhoto, savePlacePhoto, type PhotoSlot } from './placePhotos'
+import { PLACE_LIMITS, normalizeStoreKey, type PlaceInput, type PlaceView } from '../lib/places'
+import { adView, decodePhoto } from './adsChannel'
+import { parsePlaceInput, placeView } from './placeView'
+import { publish, sync, withdraw, type NewImages } from './catalogChannel'
+import { deletePlacePhoto, savePlacePhoto } from './placePhotos'
+import { isBlocked, loadConfig } from './appState'
 import { verifyInitData, verifyInitUser } from './telegramBot'
 
 // Catalog cards. "Опублікувати" posts the card to the Telegram catalog channel; the row here only
 // indexes that post so the in-app feed, edits and deletions stay in sync with the channel.
 
-type Place = typeof places.$inferSelect
-
 export type PlaceResult =
   | { ok: true; place: PlaceView; published: boolean }
-  | { ok: false; reason: 'unauthorized' | 'invalid' | 'limit' | 'not_found' | 'channel' | 'server' }
+  | { ok: false; reason: 'unauthorized' | 'invalid' | 'limit' | 'not_found' | 'channel' | 'server' | 'blocked' | 'disabled' }
 
 const isUuid = (s: string) => /^[0-9a-f-]{36}$/i.test(s)
-
-const photoUrl = (p: Place, slot: PhotoSlot) =>
-  `/api/places/photo/${p.id}?${slot === 'cover' ? 'slot=cover&' : ''}v=${p.updatedAt.getTime()}`
-
-function view(p: Place, userId: string | null): PlaceView {
-  return {
-    id: p.id,
-    storeKey: p.storeKey,
-    category: isCategory(p.category) ? p.category : 'services',
-    country: p.country,
-    city: p.city,
-    title: p.title,
-    description: p.description,
-    hours: p.hours,
-    price: p.price,
-    mapUrl: p.mapUrl,
-    phone: p.phone,
-    instagram: p.instagram,
-    tgContact: p.tgContact,
-    photoUrl: p.hasPhoto ? photoUrl(p, 'photo') : null,
-    coverUrl: p.hasCover ? photoUrl(p, 'cover') : null,
-    postUrl: postUrl(p),
-    createdAt: p.createdAt.toISOString(),
-    mine: p.telegramUserId === userId,
-  }
-}
-
-const clip = (v: unknown, max: number) => String(v ?? '').trim().slice(0, max)
-
-function parseInput(d: Partial<PlaceInput>): PlaceInput | null {
-  const category = String(d.category ?? '')
-  const title = clip(d.title, PLACE_LIMITS.title)
-  const description = clip(d.description, PLACE_LIMITS.description)
-  const country = clip(d.country, PLACE_LIMITS.country)
-  const city = clip(d.city, PLACE_LIMITS.city)
-  const rawPhone = clip(d.phone, 40)
-  const rawInsta = clip(d.instagram, 80)
-  const rawTg = clip(d.tgContact, 80)
-  const rawMap = clip(d.mapUrl, PLACE_LIMITS.mapUrl)
-  const phone = normalizePhone(rawPhone)
-  const instagram = normalizeInstagram(rawInsta)
-  const tgContact = normalizeTg(rawTg)
-  const mapUrl = normalizeMapUrl(rawMap)
-  if (!title || !description || !country || !city || !isCategory(category)) return null
-  if ((rawPhone && !phone) || (rawInsta && !instagram) || (rawTg && !tgContact) || (rawMap && !mapUrl)) return null
-  if (!phone && !instagram && !tgContact) return null
-  return {
-    category,
-    country,
-    city,
-    title,
-    description,
-    hours: clip(d.hours, PLACE_LIMITS.hours),
-    price: clip(d.price, PLACE_LIMITS.price),
-    mapUrl,
-    phone,
-    instagram,
-    tgContact,
-  }
-}
 
 export const listPlaces = createServerFn({ method: 'POST' })
   .validator((d: { initData?: string }) => ({ initData: String(d.initData ?? '').slice(0, 4096) }))
   .handler(async ({ data }): Promise<{ places: PlaceView[] }> => {
     const userId = verifyInitData(data.initData)
     const rows = await db.select().from(places).where(eq(places.status, 'active')).orderBy(desc(places.createdAt)).limit(500)
-    return { places: rows.map((r) => view(r, userId)) }
+    return { places: rows.map((r) => placeView(r, userId)) }
   })
 
 export const getStorefront = createServerFn({ method: 'POST' })
@@ -125,8 +55,8 @@ export const getStorefront = createServerFn({ method: 'POST' })
           .limit(50)
       : []
     return {
-      business: business && view(business, userId),
-      items: items.map((r) => view(r, userId)),
+      business: business && placeView(business, userId),
+      items: items.map((r) => placeView(r, userId)),
       ads: adRows.map((r) => adView(r, userId)),
     }
   })
@@ -173,7 +103,7 @@ type SaveData = {
 function prepare(data: SaveData) {
   const user = verifyInitUser(data.initData)
   if (!user) return { error: 'unauthorized' as const }
-  const input = parseInput(data.place)
+  const input = parsePlaceInput(data.place)
   const photo = decodePhoto(data.photo)
   const cover = decodePhoto(data.cover)
   if (!input || photo === 'invalid' || cover === 'invalid') return { error: 'invalid' as const }
@@ -186,6 +116,8 @@ async function createPlace(data: SaveData): Promise<PlaceResult> {
   const r = prepare(data)
   if ('error' in r) return { ok: false, reason: r.error! }
   const { user, input, storeKey, photo, cover } = r
+  if (await isBlocked(user.id)) return { ok: false, reason: 'blocked' }
+  if (!(await loadConfig()).features.catalogPosting) return { ok: false, reason: 'disabled' }
   const [{ n }] = await db
     .select({ n: count() })
     .from(places)
@@ -206,7 +138,7 @@ async function createPlace(data: SaveData): Promise<PlaceResult> {
       .set({ channelChatId: post.chatId, channelMessageIds: post.ids })
       .where(eq(places.id, row.id))
       .returning()
-    return { ok: true, place: view(saved, user.id), published: true }
+    return { ok: true, place: placeView(saved, user.id), published: true }
   } catch (e) {
     // No channel post → no card: the feed only shows what is actually in the channel.
     console.error('Publish place error:', e)
@@ -222,6 +154,7 @@ async function updatePlace(data: SaveData & { id: string }): Promise<PlaceResult
   if ('error' in r) return { ok: false, reason: r.error! }
   const { user, input, storeKey, photo, cover } = r
   if (!isUuid(data.id)) return { ok: false, reason: 'not_found' }
+  if (await isBlocked(user.id)) return { ok: false, reason: 'blocked' }
   // Only the author (same Telegram ID) can edit a card.
   const [prev] = await db
     .select()
@@ -252,7 +185,7 @@ async function updatePlace(data: SaveData & { id: string }): Promise<PlaceResult
     .update(places)
     .set({ storeKey })
     .where(and(eq(places.telegramUserId, user.id), eq(places.status, 'active')))
-  return { ok: true, place: view(saved, user.id), published: !!post }
+  return { ok: true, place: placeView(saved, user.id), published: !!post }
 }
 
 export const deletePlace = createServerFn({ method: 'POST' })
