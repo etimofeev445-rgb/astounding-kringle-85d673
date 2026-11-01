@@ -1,10 +1,9 @@
-import { and, count, desc, eq, gte, inArray, like as sqlLike, sql } from 'drizzle-orm'
+import { and, count, desc, eq, gte, like as sqlLike, sql } from 'drizzle-orm'
 import { db } from '../../../db/index.js'
-import { adminLog, ads, appEvents, places, reports, topupOrders, users } from '../../../db/schema.js'
-import { OPERATORS, formatLocal } from '../../data/operators'
-import { adminChatId, botToken, miniAppUrl, providerToken, sendMessage, webhookSecret } from '../telegramBot'
+import { adminLog, ads, appEvents, places, reports, users } from '../../../db/schema.js'
+import { adminChatId, botToken, miniAppUrl, providerToken, webhookSecret } from '../telegramBot'
 import { setupWebhook, webhookInfo } from '../webhookSetup'
-import { InputError, displayName, int, isUuid, iso, log, obj, str, type Admin } from './util'
+import { InputError, displayName, int, log, obj, str, type Admin } from './util'
 
 const DAY = 86400_000
 
@@ -44,7 +43,6 @@ export async function stats() {
     placesActive,
     placesPending,
     reportsOpen,
-    orderRows,
     opensByDay,
     newByDay,
   ] = await Promise.all([
@@ -59,10 +57,6 @@ export async function stats() {
     countWhere(places, and(eq(places.status, 'active'))),
     countWhere(places, and(eq(places.status, 'active'), eq(places.moderation, 'pending'))),
     countWhere(reports, and(eq(reports.status, 'open'))),
-    db
-      .select({ status: topupOrders.status, n: count(), sum: sql<number>`coalesce(sum(${topupOrders.amountKop}), 0)`.mapWith(Number) })
-      .from(topupOrders)
-      .groupBy(topupOrders.status),
     db
       .select({
         day: sql<string>`to_char(date(${appEvents.createdAt}), 'YYYY-MM-DD')`,
@@ -86,13 +80,9 @@ export async function stats() {
     return { day: key, opens: o?.opens ?? 0, users: o?.users ?? 0, newUsers: newByDay.find((r) => r.day === key)?.n ?? 0 }
   })
 
-  const orders = Object.fromEntries(orderRows.map((r) => [r.status, { n: r.n, sum: r.sum / 100 }]))
   return {
     users: { total: usersTotal, today: usersToday, week: users7d, month: users30d, active7d, blocked },
     content: { adsActive, adsPending, placesActive, placesPending, reportsOpen },
-    orders,
-    // Paid but not credited automatically (manual mode, failures, interrupted processing).
-    ordersAttention: (orders.paid?.n ?? 0) + (orders.failed?.n ?? 0) + (orders.processing?.n ?? 0),
     days,
   }
 }
@@ -132,52 +122,6 @@ export async function listLog(_: Admin, p: unknown) {
     })),
     pageSize: 50,
   }
-}
-
-const ORDER_STATUSES = ['pending', 'paid', 'processing', 'fulfilled', 'failed']
-
-export async function listOrders(_: Admin, p: unknown) {
-  const status = str(obj(p).status, 20)
-  const where =
-    status === 'attention'
-      ? inArray(topupOrders.status, ['paid', 'processing', 'failed'])
-      : ORDER_STATUSES.includes(status)
-        ? eq(topupOrders.status, status)
-        : undefined
-  const rows = await db.select().from(topupOrders).where(where).orderBy(desc(topupOrders.createdAt)).limit(100)
-  return {
-    items: rows.map((o) => ({
-      id: o.id,
-      userId: o.telegramUserId,
-      operator: OPERATORS.find((x) => x.id === o.operator)?.name ?? o.operator,
-      phone: `+380 ${formatLocal(o.phone)}`,
-      amount: o.amountKop / 100,
-      status: o.status,
-      error: o.error ?? '',
-      aggregatorRef: o.aggregatorRef ?? '',
-      providerChargeId: o.providerChargeId ?? '',
-      createdAt: o.createdAt.toISOString(),
-      updatedAt: iso(o.updatedAt),
-    })),
-  }
-}
-
-// For orders the admin has topped up by hand: records that and tells the customer.
-// Only paid orders qualify — this never creates or credits a payment by itself.
-export async function markOrderFulfilled(admin: Admin, p: unknown) {
-  const o = obj(p)
-  if (!isUuid(o.id)) throw new InputError('Невірний ID')
-  const note = str(o.note, 200)
-  const [order] = await db
-    .update(topupOrders)
-    .set({ status: 'fulfilled', aggregatorRef: `manual${note ? `: ${note}` : ''}`, updatedAt: new Date() })
-    .where(and(eq(topupOrders.id, o.id), inArray(topupOrders.status, ['paid', 'processing', 'failed'])))
-    .returning()
-  if (!order) throw new InputError('Замовлення не оплачене або вже виконане')
-  const op = OPERATORS.find((x) => x.id === order.operator)
-  await sendMessage(order.telegramUserId, `✅ Рахунок поповнено: ${op?.name ?? order.operator} +380 ${formatLocal(order.phone)} — ${order.amountKop / 100} ₴`)
-  await log(admin, 'order.manual_fulfilled', 'order', order.id, { amount: order.amountKop / 100, note })
-  return { ok: true }
 }
 
 export async function getWebhook() {

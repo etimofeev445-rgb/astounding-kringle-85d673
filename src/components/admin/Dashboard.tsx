@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, ChevronRight, Flag, Megaphone, Store, Users, Wallet } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Flag, Megaphone, Store, Users } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { Section } from './AdminApp'
 import { useAdminQuery } from './api'
@@ -27,7 +27,7 @@ export default function Dashboard({ env, go }: { env: Env; go: (s: Section) => v
   if (error) return <ErrorBox message={error} retry={reload} />
   if (loading && !data) return <Loading />
   if (!data) return null
-  const { users, content, orders, ordersAttention, days } = data
+  const { users, content, days } = data
   const pending = content.adsPending + content.placesPending
 
   const missing = [
@@ -46,23 +46,7 @@ export default function Dashboard({ env, go }: { env: Env; go: (s: Section) => v
         <Stat Icon={Megaphone} label="Оголошення" value={content.adsActive} sub={`бізнес-карток: ${content.placesActive}`} onClick={() => go('listings')} />
         <Stat Icon={Store} label="На перевірці" value={pending} sub="нові оголошення та картки" onClick={() => go('listings')} alert={pending > 0} />
         <Stat Icon={Flag} label="Скарги" value={content.reportsOpen} sub="відкриті" onClick={() => go('listings')} alert={content.reportsOpen > 0} />
-        <Stat
-          Icon={Wallet}
-          label="Поповнення"
-          value={orders.fulfilled?.n ?? 0}
-          sub={`виконано на ${(orders.fulfilled?.sum ?? 0).toLocaleString('uk-UA')} ₴`}
-          onClick={() => go('orders')}
-          alert={ordersAttention > 0}
-        />
       </div>
-
-      {ordersAttention > 0 && (
-        <button onClick={() => go('orders')} className="tap w-full flex items-center gap-3 rounded-2xl border border-sun/40 bg-sun/10 p-3.5 text-left">
-          <AlertTriangle size={18} className="text-sun shrink-0" />
-          <span className="flex-1 text-sm font-semibold">Оплачені поповнення, що потребують уваги: {ordersAttention}</span>
-          <ChevronRight size={18} className="text-sun" />
-        </button>
-      )}
 
       <Panel>
         <Title>Активність за 14 днів</Title>

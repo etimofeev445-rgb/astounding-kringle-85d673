@@ -32,8 +32,6 @@ export const ACTIONS = {
   'broadcasts.send': content.sendBroadcastBatch,
   'broadcasts.stop': content.stopBroadcast,
   'log.list': system.listLog,
-  'orders.list': system.listOrders,
-  'orders.fulfill': system.markOrderFulfilled,
   'webhook.get': system.getWebhook,
   'webhook.setup': system.resetWebhook,
   'automation.get': automation.overview,
