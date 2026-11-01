@@ -70,12 +70,28 @@ export function fmt(n: number, digits = 2) {
 }
 
 // Heart-style "add to Кошик" toggle used across screens. Hidden outside Telegram (no user to save for).
-export function CartToggle({ item, className = '' }: { item: CartItem; className?: string }) {
+// `tone` adapts the idle colours to the surface it sits on (default panel, coloured tile, light tile);
+// `fallback` is rendered when the cart is unavailable (e.g. a chevron in place of the button).
+export function CartToggle({
+  item,
+  className = '',
+  tone = 'default',
+  compact = false,
+  fallback = null,
+}: {
+  item: CartItem
+  className?: string
+  tone?: 'default' | 'onColor' | 'onLight'
+  compact?: boolean
+  fallback?: ReactNode
+}) {
   const { has, toggle, available } = useCart()
   const { t } = useI18n()
   const { features } = useAppConfig()
-  if (!available || !features.cart) return null
+  if (!available || !features.cart) return <>{fallback}</>
   const saved = has(item.kind, item.ref)
+  const idle = tone === 'onColor' ? 'bg-white/20 text-white' : tone === 'onLight' ? 'bg-ink/10 text-ink' : 'bg-panel-2 text-mute'
+  const on = tone === 'onColor' ? 'bg-white text-ink' : tone === 'onLight' ? 'bg-ink text-sun' : 'bg-sun text-ink'
   return (
     <button
       type="button"
@@ -86,11 +102,11 @@ export function CartToggle({ item, className = '' }: { item: CartItem; className
       }}
       aria-pressed={saved}
       aria-label={saved ? t({ uk: 'Прибрати з кошика', ru: 'Убрать из корзины' }) : t({ uk: 'Додати в кошик', ru: 'Добавить в корзину' })}
-      className={`tap h-9 w-9 shrink-0 rounded-xl grid place-items-center transition-colors ${
-        saved ? 'bg-sun text-ink' : 'bg-panel-2 text-mute'
+      className={`tap ${compact ? 'h-8 w-8' : 'h-9 w-9'} shrink-0 rounded-xl grid place-items-center transition-colors ${
+        saved ? on : idle
       } ${className}`}
     >
-      <ShoppingCart size={17} strokeWidth={saved ? 2.4 : 1.8} />
+      <ShoppingCart size={compact ? 16 : 17} strokeWidth={saved ? 2.4 : 1.8} />
     </button>
   )
 }

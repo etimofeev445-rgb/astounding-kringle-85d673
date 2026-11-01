@@ -13,6 +13,8 @@ import { category, type PlaceCategory } from '../../lib/places'
 import type { AdView } from '../../lib/ads'
 import { listAds } from '../../server/ads'
 import { FLIXBUS_URL } from '../../data/links'
+import type { CartItem } from '../../lib/cart'
+import { CartToggle } from '../ui'
 
 // Same look as the Flixbus / Telegram tiles; colours cycle through the tiles in display order.
 const TILE_GRADIENTS = [
@@ -36,6 +38,13 @@ export default function Home({ go, openMap }: { go: Go; openMap: (category: Plac
     .map((c) => SCREENS.find((s) => s.id === c.id)!)
     .filter(Boolean)
   const [brand, ...rest] = config.appName.split(' ')
+  const chevron = <ChevronRight size={18} className="shrink-0 opacity-80" />
+  // What the cart button saves for a tile: an in-app section (ref = screen id) or an external link.
+  const section = (id: Screen, title: string, subtitle: string): CartItem => ({ kind: 'section', ref: id, title, subtitle, url: '' })
+  const screenItem = (id: Screen): CartItem => {
+    const s = SCREENS.find((x) => x.id === id)!
+    return section(id, t(s.title), t(s.hint))
+  }
 
   const sections: Record<HomeSection, ReactNode> = {
     search: available('search') && (
@@ -56,34 +65,37 @@ export default function Home({ go, openMap }: { go: Go; openMap: (category: Plac
     quick: (available('cards') || available('topup')) && (
       <div className="grid grid-cols-2 gap-3 mb-6">
         {available('cards') && (
-          <button
-            onClick={() => go('cards')}
-            className="tap rise text-left rounded-3xl p-3 flex items-center gap-2.5 text-white bg-[linear-gradient(135deg,#1d6fe8,#3d9bff)] shadow-[0_16px_32px_-18px_rgba(47,140,255,0.9)]"
-          >
-            <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/20 grid place-items-center">
-              <CreditCard size={22} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-display text-sm font-bold leading-tight">{t({ uk: 'Відкрити карту', ru: 'Открыть карту' })}</div>
-              <div className="text-[11px] opacity-90 mt-0.5 truncate">Kraken · Simple · Kolo</div>
-            </div>
-            <ChevronRight size={18} className="shrink-0 opacity-80" />
-          </button>
+          <div className="rise rounded-3xl p-3 flex items-center gap-2 text-white bg-[linear-gradient(135deg,#1d6fe8,#3d9bff)] shadow-[0_16px_32px_-18px_rgba(47,140,255,0.9)]">
+            <button onClick={() => go('cards')} className="tap flex-1 min-w-0 flex items-center gap-2.5 text-left">
+              <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/20 grid place-items-center">
+                <CreditCard size={22} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-display text-sm font-bold leading-tight">{t({ uk: 'Відкрити карту', ru: 'Открыть карту' })}</div>
+                <div className="text-[11px] opacity-90 mt-0.5 truncate">Kraken · Simple · Kolo</div>
+              </div>
+            </button>
+            <CartToggle item={screenItem('cards')} tone="onColor" compact fallback={chevron} />
+          </div>
         )}
         {available('topup') && (
-          <button
-            onClick={() => go('topup')}
-            className="tap rise text-left rounded-3xl p-3 flex items-center gap-2.5 text-ink bg-[linear-gradient(135deg,#ffc21a,#ffe066)] shadow-[0_16px_32px_-18px_rgba(255,210,63,0.9)]"
-          >
-            <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/35 grid place-items-center">
-              <Smartphone size={22} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-display text-sm font-bold leading-tight">{t({ uk: 'Поповнити мобільний', ru: 'Пополнить мобильный' })}</div>
-              <div className="text-[11px] font-semibold opacity-75 mt-0.5 truncate">Kyivstar · Vodafone · lifecell</div>
-            </div>
-            <ChevronRight size={18} className="shrink-0 opacity-70" />
-          </button>
+          <div className="rise rounded-3xl p-3 flex items-center gap-2 text-ink bg-[linear-gradient(135deg,#ffc21a,#ffe066)] shadow-[0_16px_32px_-18px_rgba(255,210,63,0.9)]">
+            <button onClick={() => go('topup')} className="tap flex-1 min-w-0 flex items-center gap-2.5 text-left">
+              <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/35 grid place-items-center">
+                <Smartphone size={22} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-display text-sm font-bold leading-tight">{t({ uk: 'Поповнити мобільний', ru: 'Пополнить мобильный' })}</div>
+                <div className="text-[11px] font-semibold opacity-75 mt-0.5 truncate">Kyivstar · Vodafone · lifecell</div>
+              </div>
+            </button>
+            <CartToggle
+              item={section('topup', t({ uk: 'Поповнити мобільний', ru: 'Пополнить мобильный' }), 'Kyivstar · Vodafone · lifecell')}
+              tone="onLight"
+              compact
+              fallback={<ChevronRight size={18} className="shrink-0 opacity-70" />}
+            />
+          </div>
         )}
       </div>
     ),
@@ -107,80 +119,93 @@ export default function Home({ go, openMap }: { go: Go; openMap: (category: Plac
     nearby: <Nearby go={go} available={available} />,
     links: (
       <div className="grid grid-cols-2 gap-3 mb-5">
-        <button
-          onClick={() => {
-            haptic()
-            openLink(FLIXBUS_URL)
-          }}
-          className={`tap rise text-left rounded-3xl p-3 flex items-center gap-2.5 text-white bg-[linear-gradient(135deg,#3fae0a,#73d700)] ${
+        <div
+          className={`rise rounded-3xl p-3 flex items-center gap-2 text-white bg-[linear-gradient(135deg,#3fae0a,#73d700)] ${
             available('telegram') ? '' : 'col-span-2'
           }`}
         >
-          <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/20 grid place-items-center">
-            <Bus size={22} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="font-display text-sm font-bold">Flixbus</div>
-            <div className="text-[11px] opacity-90 mt-0.5 leading-tight">
-              {t({ uk: 'Автобусні квитки по Європі', ru: 'Автобусные билеты по Европе' })}
-            </div>
-          </div>
-          <ChevronRight size={18} className="shrink-0 opacity-80" />
-        </button>
-        {available('telegram') && (
           <button
-            onClick={() => go('telegram')}
-            className="tap rise text-left rounded-3xl p-3 flex items-center gap-2.5 text-white bg-[linear-gradient(135deg,#1d8fd6,#33aef0)]"
+            onClick={() => {
+              haptic()
+              openLink(FLIXBUS_URL)
+            }}
+            className="tap flex-1 min-w-0 flex items-center gap-2.5 text-left"
           >
             <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/20 grid place-items-center">
-              <Send size={20} />
+              <Bus size={22} />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="font-display text-sm font-bold">Telegram</div>
+              <div className="font-display text-sm font-bold">Flixbus</div>
               <div className="text-[11px] opacity-90 mt-0.5 leading-tight">
-                {t({ uk: 'Групи та канали', ru: 'Группы и каналы' })}
+                {t({ uk: 'Автобусні квитки по Європі', ru: 'Автобусные билеты по Европе' })}
               </div>
             </div>
-            <ChevronRight size={18} className="shrink-0 opacity-80" />
           </button>
+          <CartToggle
+            item={{ kind: 'service', ref: 'flixbus', title: 'Flixbus', subtitle: t({ uk: 'Автобусні квитки по Європі', ru: 'Автобусные билеты по Европе' }), url: FLIXBUS_URL }}
+            tone="onColor"
+            compact
+            fallback={chevron}
+          />
+        </div>
+        {available('telegram') && (
+          <div className="rise rounded-3xl p-3 flex items-center gap-2 text-white bg-[linear-gradient(135deg,#1d8fd6,#33aef0)]">
+            <button onClick={() => go('telegram')} className="tap flex-1 min-w-0 flex items-center gap-2.5 text-left">
+              <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/20 grid place-items-center">
+                <Send size={20} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-display text-sm font-bold">Telegram</div>
+                <div className="text-[11px] opacity-90 mt-0.5 leading-tight">
+                  {t({ uk: 'Групи та канали', ru: 'Группы и каналы' })}
+                </div>
+              </div>
+            </button>
+            <CartToggle
+              item={section('telegram', 'Telegram', t({ uk: 'Групи та канали', ru: 'Группы и каналы' }))}
+              tone="onColor"
+              compact
+              fallback={chevron}
+            />
+          </div>
         )}
       </div>
     ),
     tiles: tiles.length > 0 && (
       <div className="grid grid-cols-2 gap-3 mb-5">
         {tiles.map((s, i) => (
-          <button
+          <div
             key={s.id}
-            onClick={() => go(s.id)}
             style={{ animationDelay: `${60 * i}ms` }}
-            className={`tap rise text-left rounded-3xl p-3 flex items-center gap-2.5 text-white ${TILE_GRADIENTS[i % TILE_GRADIENTS.length]} ${
+            className={`rise rounded-3xl p-3 flex items-center gap-2 text-white ${TILE_GRADIENTS[i % TILE_GRADIENTS.length]} ${
               i === tiles.length - 1 && tiles.length % 2 ? 'col-span-2' : ''
             }`}
           >
-            <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/20 grid place-items-center text-xl leading-none">{s.emoji}</div>
-            <div className="flex-1 min-w-0">
-              <div className="font-display text-sm font-bold">{t(s.title)}</div>
-              <div className="text-[11px] opacity-90 mt-0.5 leading-tight">{t(s.hint)}</div>
-            </div>
-            <ChevronRight size={18} className="shrink-0 opacity-80" />
-          </button>
+            <button onClick={() => go(s.id)} className="tap flex-1 min-w-0 flex items-center gap-2.5 text-left">
+              <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/20 grid place-items-center text-xl leading-none">{s.emoji}</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-display text-sm font-bold">{t(s.title)}</div>
+                <div className="text-[11px] opacity-90 mt-0.5 leading-tight">{t(s.hint)}</div>
+              </div>
+            </button>
+            <CartToggle item={screenItem(s.id)} tone="onColor" compact fallback={chevron} />
+          </div>
         ))}
       </div>
     ),
     info: available('info') && (
-      <button
-        onClick={() => go('info')}
-        className="tap w-full mt-3 flex items-center gap-3 rounded-2xl bg-panel border border-line px-4 py-3.5 text-left rise"
-      >
-        <Info size={18} className="text-sky shrink-0" />
-        <span className="flex-1 min-w-0">
-          <span className="block font-semibold text-sm">{t({ uk: 'Про застосунок', ru: 'О приложении' })}</span>
-          <span className="block text-xs text-mute truncate">
-            {t({ uk: 'Про нас · Підтримка · Політика · Умови', ru: 'О нас · Поддержка · Политика · Условия' })}
+      <div className="w-full mt-3 flex items-center gap-3 rounded-2xl bg-panel border border-line pl-4 pr-3 py-3 rise">
+        <button onClick={() => go('info')} className="tap flex-1 min-w-0 flex items-center gap-3 text-left">
+          <Info size={18} className="text-sky shrink-0" />
+          <span className="flex-1 min-w-0">
+            <span className="block font-semibold text-sm">{t({ uk: 'Про застосунок', ru: 'О приложении' })}</span>
+            <span className="block text-xs text-mute truncate">
+              {t({ uk: 'Про нас · Підтримка · Політика · Умови', ru: 'О нас · Поддержка · Политика · Условия' })}
+            </span>
           </span>
-        </span>
-        <ChevronRight size={18} className="text-mute" />
-      </button>
+        </button>
+        <CartToggle item={screenItem('info')} compact fallback={<ChevronRight size={18} className="text-mute" />} />
+      </div>
     ),
   }
 
