@@ -1,5 +1,6 @@
 import { ChevronRight, ExternalLink, LifeBuoy, MapPinPlus, Megaphone, ShieldCheck } from 'lucide-react'
 import { useAppConfig } from '../../lib/appState'
+import type { CartItem } from '../../lib/cart'
 import { SERVICES } from '../../data/links'
 import { useI18n } from '../../lib/i18n'
 import { SCREENS, type Go } from '../../lib/nav'
@@ -14,6 +15,10 @@ export default function MenuScreen({ go, addPlace, openAdmin }: { go: Go; addPla
     .filter((i) => i.enabled && available(i.id))
     .map((i) => SCREENS.find((s) => s.id === i.id)!)
     .filter(Boolean)
+  const sectionItem = (id: (typeof SCREENS)[number]['id']): CartItem => {
+    const s = SCREENS.find((x) => x.id === id)!
+    return { kind: 'section', ref: id, title: t(s.title), subtitle: t(s.hint), url: '' }
+  }
 
   return (
     <div>
@@ -34,33 +39,42 @@ export default function MenuScreen({ go, addPlace, openAdmin }: { go: Go; addPla
       )}
 
       {available('ads') && (
-      <button
-        onClick={() => go('ads')}
-        className="tap rise glow-btn w-full text-left rounded-3xl p-4 mb-6 flex items-center gap-4 text-white"
-      >
-        <div className="relative h-11 w-11 shrink-0 rounded-2xl bg-white/20 grid place-items-center">
-          <Megaphone size={22} />
-        </div>
-        <div className="relative flex-1">
-          <div className="font-display font-bold">{t({ uk: 'Оголошення', ru: 'Объявления' })}</div>
-          <div className="text-xs font-semibold opacity-90 mt-0.5">
-            {t({ uk: 'Подати, переглянути, редагувати', ru: 'Подать, посмотреть, редактировать' })}
+      <div className="rise glow-btn w-full rounded-3xl p-4 mb-6 flex items-center gap-3 text-white">
+        <button onClick={() => go('ads')} className="tap relative flex-1 min-w-0 flex items-center gap-4 text-left">
+          <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/20 grid place-items-center">
+            <Megaphone size={22} />
           </div>
-        </div>
-        <ChevronRight size={20} className="relative opacity-80" />
-      </button>
+          <div className="flex-1 min-w-0">
+            <div className="font-display font-bold">{t({ uk: 'Оголошення', ru: 'Объявления' })}</div>
+            <div className="text-xs font-semibold opacity-90 mt-0.5">
+              {t({ uk: 'Подати, переглянути, редагувати', ru: 'Подать, посмотреть, редактировать' })}
+            </div>
+          </div>
+        </button>
+        <CartToggle
+          item={sectionItem('ads')}
+          tone="onColor"
+          className="relative"
+          fallback={<ChevronRight size={20} className="relative opacity-80" />}
+        />
+      </div>
       )}
 
       {available('map') && (
       <div className="grid grid-cols-2 gap-3 -mt-3 mb-6">
-        <button
+        <div
+          role="button"
+          tabIndex={0}
           onClick={() => go('map')}
-          className="tap rise rounded-3xl bg-panel/90 border border-line p-4 text-left"
+          className="tap rise rounded-3xl bg-panel/90 border border-line p-4 text-left cursor-pointer"
         >
-          <div className="text-2xl">🗺</div>
+          <div className="flex items-start justify-between">
+            <div className="text-2xl">🗺</div>
+            <CartToggle item={sectionItem('map')} />
+          </div>
           <div className="font-display font-bold mt-2">{t({ uk: 'Карта', ru: 'Карта' })}</div>
           <div className="text-xs text-mute mt-0.5">{t({ uk: 'Каталог бізнесів', ru: 'Каталог бизнесов' })}</div>
-        </button>
+        </div>
         {features.catalogPosting && (
           <button
             onClick={addPlace}
@@ -108,17 +122,26 @@ export default function MenuScreen({ go, addPlace, openAdmin }: { go: Go; addPla
       </div>
 
       {available('support') && (
-        <button
-          onClick={() => go('support')}
-          className="tap rise w-full mb-6 flex items-center gap-3 rounded-3xl bg-panel/90 border border-line px-4 py-3 text-left"
-        >
-          <LifeBuoy size={22} className="text-sky shrink-0" />
-          <span className="flex-1 min-w-0">
-            <span className="block font-semibold">{t({ uk: 'Підтримка', ru: 'Поддержка' })}</span>
-            <span className="block text-xs text-mute truncate">{t({ uk: 'Чат з AI-консультантом і адміністратором', ru: 'Чат с AI-консультантом и администратором' })}</span>
-          </span>
-          <ChevronRight size={18} className="text-mute" />
-        </button>
+        <div className="rise w-full mb-6 flex items-center gap-3 rounded-3xl bg-panel/90 border border-line pl-4 pr-3 py-3">
+          <button onClick={() => go('support')} className="tap flex-1 min-w-0 flex items-center gap-3 text-left">
+            <LifeBuoy size={22} className="text-sky shrink-0" />
+            <span className="flex-1 min-w-0">
+              <span className="block font-semibold">{t({ uk: 'Підтримка', ru: 'Поддержка' })}</span>
+              <span className="block text-xs text-mute truncate">{t({ uk: 'Чат з AI-консультантом і адміністратором', ru: 'Чат с AI-консультантом и администратором' })}</span>
+            </span>
+          </button>
+          <CartToggle
+            item={{
+              kind: 'section',
+              ref: 'support',
+              title: t({ uk: 'Підтримка', ru: 'Поддержка' }),
+              subtitle: t({ uk: 'Чат з AI-консультантом і адміністратором', ru: 'Чат с AI-консультантом и администратором' }),
+              url: '',
+            }}
+            compact
+            fallback={<ChevronRight size={18} className="text-mute" />}
+          />
+        </div>
       )}
 
       <h2 className="text-xs font-semibold uppercase tracking-wider text-mute mb-2 px-1">
@@ -126,18 +149,16 @@ export default function MenuScreen({ go, addPlace, openAdmin }: { go: Go; addPla
       </h2>
       <div className="rounded-3xl bg-panel/90 border border-line divide-y divide-line overflow-hidden">
         {items.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => go(s.id)}
-            className="tap w-full flex items-center gap-3 px-4 py-3 text-left"
-          >
-            <span className="text-xl">{s.emoji}</span>
-            <span className="flex-1 min-w-0">
-              <span className="block font-semibold">{t(s.title)}</span>
-              <span className="block text-xs text-mute truncate">{t(s.hint)}</span>
-            </span>
-            <ChevronRight size={18} className="text-mute" />
-          </button>
+          <div key={s.id} className="flex items-center gap-3 pl-4 pr-3 py-2.5">
+            <button onClick={() => go(s.id)} className="tap flex-1 min-w-0 flex items-center gap-3 text-left">
+              <span className="text-xl">{s.emoji}</span>
+              <span className="flex-1 min-w-0">
+                <span className="block font-semibold">{t(s.title)}</span>
+                <span className="block text-xs text-mute truncate">{t(s.hint)}</span>
+              </span>
+            </button>
+            <CartToggle item={sectionItem(s.id)} compact fallback={<ChevronRight size={18} className="text-mute" />} />
+          </div>
         ))}
       </div>
     </div>

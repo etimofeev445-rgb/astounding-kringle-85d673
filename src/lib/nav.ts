@@ -4,6 +4,12 @@ export type Screen = 'home' | 'search' | 'rates' | 'banks' | 'docs' | 'calc' | '
 
 export type Go = (s: Screen) => void
 
+// Every screen id, for validating ids saved in the cart.
+export const ALL_SCREENS = [
+  'home', 'search', 'rates', 'banks', 'docs', 'calc', 'calendar', 'cards', 'np', 'telegram', 'topup',
+  'menu', 'ads', 'cart', 'news', 'info', 'map', 'store', 'support',
+] as const satisfies readonly Screen[]
+
 export const SCREENS: { id: Screen; title: Tr; hint: Tr; emoji: string }[] = [
   {
     id: 'map', emoji: '🗺',
