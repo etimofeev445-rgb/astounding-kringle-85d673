@@ -14,6 +14,15 @@ import type { AdView } from '../../lib/ads'
 import { listAds } from '../../server/ads'
 import { FLIXBUS_URL } from '../../data/links'
 
+// Same look as the Flixbus / Telegram tiles; colours cycle through the tiles in display order.
+const TILE_GRADIENTS = [
+  'bg-[linear-gradient(135deg,#6a35e8,#9d6dff)]',
+  'bg-[linear-gradient(135deg,#e8590c,#ffa03a)]',
+  'bg-[linear-gradient(135deg,#d1245a,#f46a90)]',
+  'bg-[linear-gradient(135deg,#0c9a8a,#34d3b8)]',
+  'bg-[linear-gradient(135deg,#3d4fe0,#6f86ff)]',
+]
+
 export default function Home({ go, openMap }: { go: Go; openMap: (category: PlaceCategory) => void }) {
   const { lang, setLang, t } = useI18n()
   const config = useAppConfig()
@@ -144,15 +153,16 @@ export default function Home({ go, openMap }: { go: Go; openMap: (category: Plac
             key={s.id}
             onClick={() => go(s.id)}
             style={{ animationDelay: `${60 * i}ms` }}
-            className={`tap rise text-left rounded-3xl bg-panel border border-line p-4 ${
-              i === tiles.length - 1 && tiles.length % 2 ? 'col-span-2 flex items-center gap-4' : ''
+            className={`tap rise text-left rounded-3xl p-3 flex items-center gap-2.5 text-white ${TILE_GRADIENTS[i % TILE_GRADIENTS.length]} ${
+              i === tiles.length - 1 && tiles.length % 2 ? 'col-span-2' : ''
             }`}
           >
-            <div className="text-3xl mb-2">{s.emoji}</div>
-            <div>
-              <div className="font-bold">{t(s.title)}</div>
-              <div className="text-xs text-mute mt-0.5">{t(s.hint)}</div>
+            <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/20 grid place-items-center text-xl leading-none">{s.emoji}</div>
+            <div className="flex-1 min-w-0">
+              <div className="font-display text-sm font-bold">{t(s.title)}</div>
+              <div className="text-[11px] opacity-90 mt-0.5 leading-tight">{t(s.hint)}</div>
             </div>
+            <ChevronRight size={18} className="shrink-0 opacity-80" />
           </button>
         ))}
       </div>
