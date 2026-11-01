@@ -1,6 +1,6 @@
 import {
   Bell, Bot, ClipboardList, FileText, Home, LayoutDashboard, LayoutList, LifeBuoy, LogOut, Megaphone, Settings, ShieldAlert,
-  ShieldCheck, Users as UsersIcon, Wallet,
+  ShieldCheck, Users as UsersIcon,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { AppConfig } from '../../lib/appConfig'
@@ -14,13 +14,12 @@ import DocumentsAdmin from './DocumentsAdmin'
 import { HomeEditor, MenuEditor } from './ConfigEditors'
 import Listings from './Listings'
 import Notifications from './Notifications'
-import Orders from './Orders'
 import SettingsAdmin from './SettingsAdmin'
 import SupportAdmin from './SupportAdmin'
 import { ErrorBox, Loading } from './ui'
 import Users from './Users'
 
-export type Section = 'dashboard' | 'auto' | 'support' | 'users' | 'listings' | 'home' | 'menu' | 'notify' | 'docs' | 'orders' | 'settings' | 'log'
+export type Section = 'dashboard' | 'auto' | 'support' | 'users' | 'listings' | 'home' | 'menu' | 'notify' | 'docs' | 'settings' | 'log'
 
 const SECTIONS: { id: Section; label: string; Icon: typeof Home }[] = [
   { id: 'dashboard', label: 'Огляд', Icon: LayoutDashboard },
@@ -32,7 +31,6 @@ const SECTIONS: { id: Section; label: string; Icon: typeof Home }[] = [
   { id: 'menu', label: 'Меню', Icon: LayoutList },
   { id: 'notify', label: 'Розсилки', Icon: Bell },
   { id: 'docs', label: 'Документи', Icon: FileText },
-  { id: 'orders', label: 'Поповнення', Icon: Wallet },
   { id: 'settings', label: 'Налаштування', Icon: Settings },
   { id: 'log', label: 'Журнал', Icon: ClipboardList },
 ]
@@ -126,7 +124,6 @@ export default function AdminApp({ onExit }: { onExit: () => void }) {
             {section === 'listings' && <Listings />}
             {section === 'notify' && <Notifications />}
             {section === 'docs' && <DocumentsAdmin />}
-            {section === 'orders' && <Orders />}
             {section === 'log' && <AuditLog />}
             {(section === 'home' || section === 'menu' || section === 'settings') &&
               (cfg.error ? (
