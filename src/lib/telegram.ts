@@ -77,12 +77,15 @@ export function haptic(style: HapticStyle = 'light') {
   tg()?.HapticFeedback?.impactOccurred(style)
 }
 
-export function openLink(url: string) {
+// `inApp` asks Telegram to keep the page inside Telegram (in-app viewer / t.me links open in the
+// client). Telegram decides how a page is finally shown, so this is a request, not a guarantee.
+export function openLink(url: string, opts: { inApp?: boolean } = {}) {
   const app = tg()
   if (url.startsWith('https://t.me/') && app?.openTelegramLink) {
     app.openTelegramLink(url)
   } else if (app?.openLink) {
-    app.openLink(url)
+    if (opts.inApp) (app.openLink as (u: string, o?: { try_instant_view?: boolean }) => void)(url, { try_instant_view: true })
+    else app.openLink(url)
   } else {
     window.open(url, '_blank', 'noopener')
   }

@@ -5,6 +5,7 @@ import { SCREENS } from '../../lib/nav'
 import { CATEGORIES, type PlaceCategory } from '../../lib/places'
 import type { ConfigCtx } from './AdminApp'
 import { ImageUpload } from './ImageUpload'
+import MenuItemsEditor from './MenuItems'
 import { Btn, Field, OrderButtons, Panel, Switch, Title, aInput, move, useAction } from './ui'
 
 const screenName = (id: string) => {
@@ -17,6 +18,12 @@ function useDraft({ config, save }: ConfigCtx, area: string) {
   const [draft, setDraft] = useState(config)
   const { busy, run } = useAction()
   const dirty = JSON.stringify(draft) !== JSON.stringify(config)
+  // Saves `next` right away and adopts what the server stored (it sanitizes), so the draft stays in sync.
+  const commit = async (next: AppConfig, opts: { confirm?: string; done?: string } = {}) => {
+    const saved = await run('save', () => save(next, area), opts)
+    if (saved) setDraft(saved)
+    return !!saved
+  }
   const bar = (
     <div className="sticky bottom-3 z-20 mt-5">
       <div className="flex gap-2 rounded-2xl border border-adm-line bg-adm-panel/95 backdrop-blur p-2 shadow-2xl">
@@ -28,14 +35,14 @@ function useDraft({ config, save }: ConfigCtx, area: string) {
           disabled={!dirty}
           busy={busy === 'save'}
           className="flex-[2]"
-          onClick={() => run('save', () => save(draft, area), { confirm: 'Зберегти зміни? Вони одразу побачать усі користувачі.', done: 'Збережено' })}
+          onClick={() => commit(draft, { confirm: 'Зберегти зміни? Вони одразу побачать усі користувачі.', done: 'Збережено' })}
         >
           {dirty ? 'Зберегти зміни' : 'Збережено'}
         </Btn>
       </div>
     </div>
   )
-  return { draft, setDraft, bar }
+  return { draft, setDraft, bar, commit, busy: busy === 'save' }
 }
 
 function ToggleList<T extends string>({
@@ -221,16 +228,17 @@ function BannerEditor({
 }
 
 export function MenuEditor(ctx: ConfigCtx) {
-  const { draft, setDraft, bar } = useDraft(ctx, 'menu')
+  const { draft, setDraft, bar, commit, busy } = useDraft(ctx, 'menu')
   const menu = draft.menu
   const setMenu = (m: Partial<AppConfig['menu']>) => setDraft({ ...draft, menu: { ...menu, ...m } })
   return (
     <div className="space-y-5">
-      <section>
-        <Title>Пункти меню</Title>
-        <p className="text-xs text-mute mb-2">Список «Розділи» у вкладці «Меню»: порядок і видимість.</p>
-        <ToggleList items={menu.items} onChange={(items) => setMenu({ items })} name={screenName} />
-      </section>
+      <MenuItemsEditor
+        items={menu.items}
+        onChange={(items) => setMenu({ items })}
+        commit={(items, opts) => commit({ ...draft, menu: { ...menu, items } }, opts)}
+        busy={busy}
+      />
       <section>
         <Title>Нижня панель</Title>
         <p className="text-xs text-mute mb-2">«Головна» показується завжди першою.</p>

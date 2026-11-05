@@ -37,7 +37,8 @@ const SECTIONS: { id: Section; label: string; Icon: typeof Home }[] = [
 
 export interface ConfigCtx {
   config: AppConfig
-  save: (next: AppConfig, area: string) => Promise<void>
+  // Resolves to the config as stored (sanitized) by the server.
+  save: (next: AppConfig, area: string) => Promise<AppConfig>
 }
 
 export default function AdminApp({ onExit }: { onExit: () => void }) {
@@ -71,6 +72,7 @@ export default function AdminApp({ onExit }: { onExit: () => void }) {
     const saved = await adminCall('config.save', { config: next, area })
     cfg.setData(saved)
     setAppConfig(saved)
+    return saved
   }
 
   return (

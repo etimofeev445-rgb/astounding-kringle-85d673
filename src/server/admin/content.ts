@@ -2,7 +2,7 @@ import { getStore } from '@netlify/blobs'
 import { and, asc, desc, eq, inArray } from 'drizzle-orm'
 import { db } from '../../../db/index.js'
 import { appSettings, broadcasts, documents } from '../../../db/schema.js'
-import { isHttpsUrl, sanitizeConfig } from '../../lib/appConfig'
+import { isBuiltinMenuId, isHttpsUrl, menuListErrors, sanitizeConfig } from '../../lib/appConfig'
 import { isAudience, type BroadcastAudience } from '../../lib/automation'
 import { loadConfig } from '../appState'
 import { broadcastMessage, countRecipients, sendNextBatch } from '../broadcasting'
@@ -15,6 +15,12 @@ export const getConfig = () => loadConfig()
 
 export async function saveConfig(admin: Admin, p: unknown) {
   const before = await loadConfig()
+  // The sanitizer silently drops bad entries; the admin must be told instead of losing them.
+  const rawMenu = (obj(p).config as { menu?: { items?: unknown } } | undefined)?.menu?.items
+  if (rawMenu !== undefined) {
+    const errors = menuListErrors(rawMenu)
+    if (errors.length) throw new InputError(`Меню не збережено:\n${errors.slice(0, 4).join('\n')}`)
+  }
   const next = sanitizeConfig(obj(p).config)
   await db
     .insert(appSettings)
@@ -22,7 +28,13 @@ export async function saveConfig(admin: Admin, p: unknown) {
     .onConflictDoUpdate({ target: appSettings.key, set: { value: next, updatedAt: new Date() } })
   // Log which top-level areas changed, e.g. ["home", "features"].
   const changed = (Object.keys(next) as (keyof typeof next)[]).filter((k) => JSON.stringify(next[k]) !== JSON.stringify(before[k]))
-  await log(admin, 'settings.update', 'settings', String(obj(p).area ?? ''), { changed })
+  const ids = (c: typeof next) => c.menu.items.filter((i) => !isBuiltinMenuId(i.id)).map((i) => i.id)
+  const menuAdded = ids(next).filter((id) => !ids(before).includes(id))
+  const menuRemoved = ids(before).filter((id) => !ids(next).includes(id))
+  await log(admin, 'settings.update', 'settings', String(obj(p).area ?? ''), {
+    changed,
+    ...(menuAdded.length || menuRemoved.length ? { menuAdded, menuRemoved } : {}),
+  })
   return next
 }
 
