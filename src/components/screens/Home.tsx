@@ -5,7 +5,7 @@ import {
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { SCREENS, type Go, type Screen } from '../../lib/nav'
 import { LANGS, useI18n, type Tr } from '../../lib/i18n'
-import { categoryOrder, type HomeSection } from '../../lib/appConfig'
+import { categoryOrder, screenView, type HomeSection } from '../../lib/appConfig'
 import { useAppConfig } from '../../lib/appState'
 import { haptic, initData, openLink, userName } from '../../lib/telegram'
 import { usePlaces } from '../../lib/placesData'
@@ -41,9 +41,10 @@ export default function Home({ go, openMap }: { go: Go; openMap: (category: Plac
   const chevron = <ChevronRight size={18} className="shrink-0 opacity-80" />
   // What the cart button saves for a tile: an in-app section (ref = screen id) or an external link.
   const section = (id: Screen, title: string, subtitle: string): CartItem => ({ kind: 'section', ref: id, title, subtitle, url: '' })
+  // Built-in sections use the admin's renamed texts / icons (Меню → Пункти меню).
   const screenItem = (id: Screen): CartItem => {
-    const s = SCREENS.find((x) => x.id === id)!
-    return section(id, t(s.title), t(s.hint))
+    const v = screenView(config, id, lang)
+    return section(id, v.title, v.hint)
   }
 
   const sections: Record<HomeSection, ReactNode> = {
@@ -173,7 +174,9 @@ export default function Home({ go, openMap }: { go: Go; openMap: (category: Plac
     ),
     tiles: tiles.length > 0 && (
       <div className="grid grid-cols-2 gap-3 mb-5">
-        {tiles.map((s, i) => (
+        {tiles.map((s, i) => {
+          const v = screenView(config, s.id, lang)
+          return (
           <div
             key={s.id}
             style={{ animationDelay: `${60 * i}ms` }}
@@ -182,15 +185,16 @@ export default function Home({ go, openMap }: { go: Go; openMap: (category: Plac
             }`}
           >
             <button onClick={() => go(s.id)} className="tap flex-1 min-w-0 flex items-center gap-2.5 text-left">
-              <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/20 grid place-items-center text-xl leading-none">{s.emoji}</div>
+              <div className="h-11 w-11 shrink-0 rounded-2xl bg-white/20 grid place-items-center text-xl leading-none">{v.emoji}</div>
               <div className="flex-1 min-w-0">
-                <div className="font-display text-sm font-bold">{t(s.title)}</div>
-                <div className="text-[11px] opacity-90 mt-0.5 leading-tight">{t(s.hint)}</div>
+                <div className="font-display text-sm font-bold">{v.title}</div>
+                <div className="text-[11px] opacity-90 mt-0.5 leading-tight">{v.hint}</div>
               </div>
             </button>
             <CartToggle item={screenItem(s.id)} tone="onColor" compact fallback={chevron} />
           </div>
-        ))}
+          )
+        })}
       </div>
     ),
     info: available('info') && (

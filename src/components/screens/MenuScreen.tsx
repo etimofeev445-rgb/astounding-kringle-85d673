@@ -1,23 +1,38 @@
-import { ChevronRight, ExternalLink, LifeBuoy, MapPinPlus, Megaphone, ShieldCheck } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink, LifeBuoy, MapPinPlus, Megaphone, ShieldCheck } from 'lucide-react'
+import { useState } from 'react'
+import { menuItemView, screenView, type MenuItem } from '../../lib/appConfig'
 import { useAppConfig } from '../../lib/appState'
 import type { CartItem } from '../../lib/cart'
 import { SERVICES } from '../../data/links'
 import { useI18n } from '../../lib/i18n'
-import { SCREENS, type Go } from '../../lib/nav'
+import { type Go, type Screen } from '../../lib/nav'
 import { haptic, openLink } from '../../lib/telegram'
 import { CartToggle, ScreenTitle } from '../ui'
 
 export default function MenuScreen({ go, addPlace, openAdmin }: { go: Go; addPlace: () => void; openAdmin?: () => void }) {
-  const { t } = useI18n()
+  const { lang, t } = useI18n()
   const { menu, features } = useAppConfig()
-  const available = (id: (typeof SCREENS)[number]['id']) => !menu.disabledScreens.includes(id)
-  const items = menu.items
-    .filter((i) => i.enabled && available(i.id))
-    .map((i) => SCREENS.find((s) => s.id === i.id)!)
-    .filter(Boolean)
-  const sectionItem = (id: (typeof SCREENS)[number]['id']): CartItem => {
-    const s = SCREENS.find((x) => x.id === id)!
-    return { kind: 'section', ref: id, title: t(s.title), subtitle: t(s.hint), url: '' }
+  const config = useAppConfig()
+  const [openInfo, setOpenInfo] = useState<string | null>(null)
+  const available = (id: Screen) => !menu.disabledScreens.includes(id)
+  // The «Розділи» list comes straight from the admin's config: active entries, in the admin's order.
+  const items = menu.items.filter((i) => i.enabled && (i.action !== 'screen' || available(i.target as Screen)))
+  const sectionItem = (id: Screen): CartItem => {
+    const v = screenView(config, id, lang)
+    return { kind: 'section', ref: id, title: v.title, subtitle: v.hint, url: '' }
+  }
+  // What the cart button saves for an entry; info blocks have nothing to reopen, so they get none.
+  const cartItemFor = (i: MenuItem): CartItem | null => {
+    const v = menuItemView(i, lang)
+    if (i.action === 'screen') return sectionItem(i.target as Screen)
+    if (i.action === 'info') return null
+    return { kind: i.action === 'bot' ? 'channel' : 'service', ref: `menu_${i.id}`, title: v.title, subtitle: v.hint, url: i.target }
+  }
+  const activate = (i: MenuItem) => {
+    if (i.action === 'screen') return go(i.target as Screen)
+    if (i.action === 'info') return setOpenInfo(openInfo === i.id ? null : i.id)
+    haptic('medium')
+    openLink(i.target, { inApp: i.openIn === 'app' })
   }
 
   return (
@@ -148,18 +163,53 @@ export default function MenuScreen({ go, addPlace, openAdmin }: { go: Go; addPla
         {t({ uk: 'Розділи', ru: 'Разделы' })}
       </h2>
       <div className="rounded-3xl bg-panel/90 border border-line divide-y divide-line overflow-hidden">
-        {items.map((s) => (
-          <div key={s.id} className="flex items-center gap-3 pl-4 pr-3 py-2.5">
-            <button onClick={() => go(s.id)} className="tap flex-1 min-w-0 flex items-center gap-3 text-left">
-              <span className="text-xl">{s.emoji}</span>
-              <span className="flex-1 min-w-0">
-                <span className="block font-semibold">{t(s.title)}</span>
-                <span className="block text-xs text-mute truncate">{t(s.hint)}</span>
-              </span>
-            </button>
-            <CartToggle item={sectionItem(s.id)} compact fallback={<ChevronRight size={18} className="text-mute" />} />
-          </div>
-        ))}
+        {items.map((i) => {
+          const v = menuItemView(i, lang)
+          const cart = cartItemFor(i)
+          const external = i.action === 'link' || i.action === 'bot'
+          const chevron = i.action === 'info' ? (
+            <ChevronDown size={18} className={`text-mute transition-transform ${openInfo === i.id ? 'rotate-180' : ''}`} />
+          ) : external ? (
+            <ExternalLink size={16} className="text-mute" />
+          ) : (
+            <ChevronRight size={18} className="text-mute" />
+          )
+          return (
+            <div key={i.id}>
+              <div className="flex items-center gap-3 pl-4 pr-3 py-2.5">
+                <button onClick={() => activate(i)} aria-expanded={i.action === 'info' ? openInfo === i.id : undefined} className="tap flex-1 min-w-0 flex items-center gap-3 text-left">
+                  <span className="text-xl">{v.emoji}</span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block font-semibold">{v.title}</span>
+                    {v.hint && <span className="block text-xs text-mute truncate">{v.hint}</span>}
+                  </span>
+                  {i.buttonText && external ? (
+                    <span className="shrink-0 rounded-lg bg-sky/15 text-sky px-2.5 py-1 text-xs font-bold">{i.buttonText}</span>
+                  ) : (
+                    cart ? null : chevron
+                  )}
+                </button>
+                {cart ? <CartToggle item={cart} compact fallback={chevron} /> : null}
+              </div>
+              {i.action === 'info' && openInfo === i.id && (
+                <div className="px-4 pb-3.5 -mt-1">
+                  <p className="text-sm text-white/85 whitespace-pre-wrap break-words">{i.body}</p>
+                  {i.target && (
+                    <button
+                      onClick={() => {
+                        haptic('medium')
+                        openLink(i.target, { inApp: i.openIn === 'app' })
+                      }}
+                      className="tap mt-3 rounded-xl bg-sky px-4 py-2.5 text-sm font-bold text-white"
+                    >
+                      {i.buttonText || t({ uk: 'Відкрити', ru: 'Открыть' })}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )
